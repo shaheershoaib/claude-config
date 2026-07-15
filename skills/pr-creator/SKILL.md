@@ -164,7 +164,7 @@ rm /tmp/pr-body.md
 - **Base**: the repo's integration/default branch. That is `main` only when the
   project has no designated integration branch - many projects integrate on a
   long-lived branch instead (check the project skill / CLAUDE.md / memory;
-  e.g. a `develop` or `release/*` style branch). Never base on an
+  e.g. a `develop`, `staging`, or `phase-4` style branch). Never base on an
   unrelated feature branch.
 
 ## Safety principles

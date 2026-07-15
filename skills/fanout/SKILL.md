@@ -1,6 +1,6 @@
 ---
 name: fanout
-description: Use whenever 2+ work-items are on the table in one session - a board with several Open tickets, a multi-finding fix wave, several asks in one or successive user messages - BEFORE starting any of them, and AGAIN when new items arrive mid-session (re-batch; do not queue new asks behind the current item). Not just for when a fan-out is already decided - this tool is HOW you decide: it computes parallel vs serialize clusters, the wave schedule (honoring declared `after` dependencies), and per-item risk tier from the items' edited files (+ an optional graphify graph for coupling hints). Consumed by ship (step 0) and parity-builder (plan step). The project supplies the risk-marker taxonomy and any graph path; this tool bakes in no project paths.
+description: Use whenever 2+ work-items are on the table in one session - a board with several Open tickets, a multi-finding fix wave, several asks in one or successive user messages - BEFORE starting any of them, and AGAIN when new items arrive mid-session (re-batch; do not queue new asks behind the current item). Not just for when a fan-out is already decided - this tool is HOW you decide: it computes parallel vs serialize clusters, the wave schedule (honoring declared `after` dependencies), and per-item risk tier from the items' edited files (+ an optional graphify graph for coupling hints). Consumed by ship (step 0) and proto-port (plan step). The project supplies the risk-marker taxonomy and any graph path; this tool bakes in no project paths.
 ---
 
 # fanout
@@ -11,7 +11,7 @@ Turn "fan out only on disjoint files" from manual judgment into a computed plan.
 (clusters/waves/tiers, in seconds, deterministic) and NEVER executes - it spawns
 no agents, touches no git, ships nothing. The actual fan-out (dispatching build
 agents per wave, the gated spine, verification, close-outs) is the CONSUMER's
-job - `ship` for work-sets, `parity-builder` for ports.
+job - `ship` for work-sets, `proto-port` for ports.
 
 ## Use it
 `python3 ~/.claude/skills/fanout/fanout.py --items <items.json> [--graph <graph.json>] --risk-markers <a,b,c> [--trajectories <store.jsonl> | --no-trajectories]`
@@ -38,10 +38,10 @@ job - `ship` for work-sets, `parity-builder` for ports.
 - `--risk-markers`: comma-separated path substrings that force the top model tier
   (the PROJECT supplies these - its own high-risk surfaces, e.g. financial, auth,
   migration, or contract paths).
-- `--trajectories`: (optional) the `trajectory-kb` JSONL store. Defaults to the
-  global store and is read automatically, so the gate is HISTORY-AWARE: a surface
-  with a bad track record gets tiered up and surfaces known to break each other get
-  a serialize hint. A missing/empty store - or `--no-trajectories` - yields the
+- `--trajectories`: (optional) a trajectory-memory JSONL store, if the setup
+  provides one. Defaults to the global store when present and is read
+  automatically, so the plan is HISTORY-AWARE: a surface with a bad track record
+  gets tiered up and surfaces known to break each other get a serialize hint. A missing/empty store - or `--no-trajectories` - yields the
   marker-only plan (identical output). History only ever ADDS caution; it never
   relaxes a tier or drops a signal.
 
@@ -63,13 +63,18 @@ Output JSON:
 - `coupling_review`: for each file-disjoint, NOT-co-clustered PAIR that carries a soft
   coupling signal, an entry `{pair, signals, default}`. Signals: `import-adjacent`
   (their files are one hop apart in the graph), `shared-risk-marker:<M>` (the SAME
-  risk-marker matches a file in both), and `regression-history` (trajectory memory
-  records a fix on one of these surfaces having BROKEN the other). `default` is
-  `serialize` when they share a risk-marker OR have a regression history (same
-  high-risk subsystem / known to break each other -> likely must serialize), else
-  `parallel`. Signal-free pairs are omitted, and so are pairs already ORDERED by
-  an `after` path (their verdict is declared, not pending). This FEEDS the
-  mandatory verdict below; it does NOT decide - the orchestrator does.
+  risk-marker matches a file in both), `regression-history` (trajectory memory
+  records a fix on one of these surfaces having BROKEN the other), and
+  `same-migration-app:<A>` (both leaves add a migration to app `<A>`'s
+  sequentially-numbered `migrations/` dir, so building them in parallel produces
+  two migrations at the SAME number and one loses the rebase - a collision
+  file-overlap clustering misses because the new files have different names).
+  `default` is `serialize` when they share a risk-marker, have a regression
+  history, OR would collide on a migration number (same high-risk subsystem /
+  known to break each other / guaranteed rebase conflict -> likely must
+  serialize), else `parallel`. Signal-free pairs are omitted, and so are pairs
+  already ORDERED by an `after` path (their verdict is declared, not pending).
+  This FEEDS the mandatory verdict below; it does NOT decide - the orchestrator does.
 - `tier`: per item, `top` or `cheap` (map to your models, e.g. top=Opus, cheap=Sonnet).
   A path-marker match forces `top`; trajectory memory ALSO forces `top` for a surface
   with a bad track record (a recorded revert, a speculative ship, a caused-regression,
@@ -150,9 +155,10 @@ Output JSON:
   entries), so it can over-match - but the only effects are bumping a tier UP or
   adding a serialize HINT (the orchestrator still renders the verdict). It never
   relaxes anything, and an absent/empty store is a no-op. Populate `files` (and
-  `regressed` when a fix breaks a twin) on `append_trajectory` for precise joins.
+  `regressed` when a fix breaks a twin) when appending trajectory entries, for
+  precise joins.
 
 ## Related
-- `ship` (step 0 + batching), `parity-builder` (plan step) - the consumers.
+- `ship` (step 0 + batching), `proto-port` (plan step) - the consumers.
 - `graphify` - produces the `graph.json` this reads.
-- `trajectory-kb` (MCP) - the history store this reads for history-aware tiering + the `regression-history` coupling signal.
+- A trajectory-memory store (whichever MCP/plugin the setup provides) - the optional history this reads for history-aware tiering + the `regression-history` coupling signal.

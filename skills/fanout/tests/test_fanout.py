@@ -20,8 +20,8 @@ class FanoutPlanTests(unittest.TestCase):
     def test_cluster_items_groups_contract_group(self):
         # File-disjoint but declared as halves of one contract -> serialize together.
         items = [
-            {"name": "svc", "files": ["services/billing.py"], "contract_group": "remit-split"},
-            {"name": "view", "files": ["views_billing.py"], "contract_group": "remit-split"},
+            {"name": "svc", "files": ["services/billing_export.py"], "contract_group": "billing-split"},
+            {"name": "view", "files": ["views_billing_export.py"], "contract_group": "billing-split"},
             {"name": "other", "files": ["unrelated.tsx"]},
         ]
         clusters = sorted(sorted(c) for c in fp.cluster_items(items))
@@ -47,6 +47,25 @@ class FanoutPlanTests(unittest.TestCase):
         out = fp.coupling_review(items, {}, ["_cents"])
         self.assertEqual(out[0]["default"], "serialize")
         self.assertIn("shared-risk-marker:_cents", out[0]["signals"])
+
+    def test_coupling_review_same_migration_app_defaults_serialize(self):
+        # File-disjoint leaves (different migration filenames) that both add a
+        # migration to the SAME app collide on the number -> serialize signal.
+        items = [
+            {"name": "A", "files": ["app/modules/onboarding/migrations/0089_audit.py"]},
+            {"name": "B", "files": ["app/modules/onboarding/migrations/0089_churn.py"]},
+        ]
+        out = fp.coupling_review(items, {}, [])
+        self.assertEqual(out[0]["default"], "serialize")
+        self.assertIn("same-migration-app:app/modules/onboarding", out[0]["signals"])
+
+    def test_coupling_review_migrations_in_different_apps_stay_parallel(self):
+        items = [
+            {"name": "A", "files": ["apps/billing/migrations/0089_x.py"]},
+            {"name": "B", "files": ["apps/customers/migrations/0089_y.py"]},
+        ]
+        out = fp.coupling_review(items, {}, [])
+        self.assertEqual(out, [])  # different apps -> no collision, signal-free
 
     def test_coupling_review_omits_signal_free_and_co_clustered(self):
         items = [

@@ -14,7 +14,8 @@ description: >-
 
 A health check for the agent environment itself - the meta layer most setups
 never verify until something silently stops working. (The "grade your setup"
-idea kept to a static, dependency-free check.)
+idea, kept to a static dependency-free
+check.)
 
 ## What it checks
 - **Skills** - every `~/.claude/skills/*/SKILL.md` parses as frontmatter and has
@@ -76,5 +77,5 @@ lines are the diff.
 - Periodically, as a config-health pass.
 
 ## Related
-- `trajectory-kb`, `teaching-knowledge-base` - MCP servers this audits.
+- The user-scope MCP servers in `~/.claude.json` are what the MCP check audits.
 - `fewer-permission-prompts` - the other "tune your setup" skill.

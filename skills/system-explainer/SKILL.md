@@ -1,6 +1,6 @@
 ---
 name: system-explainer
-description: Two jobs, one source of truth. (1) TEACHES a user how an unfamiliar software system works (web app, codebase, API, infrastructure) — concept-first, validated through restatement and stress-tests, grounded in real artifacts; use when a user asks "explain this system", "help me understand this codebase", "teach me how this works". (2) GENERATES a standalone, interactive onboarding course app from a repo (Phase 4) — hand-authored from a teaching knowledge base, or via an autonomous loop on a cold repo with NO knowledge base — and VERIFIES it: every snippet grounded against source, every claim adversarially checked, teaching measured with a simulated learner (the proof report); use when asked to "build/generate an onboarding course/app for <system>", "course this repo", or "verify/prove the course".
+description: Two jobs, one source of truth. (1) TEACHES a user how an unfamiliar software system works (web app, codebase, API, infrastructure, or a live tool whose "source" is a canvas/config UI — a workflow or automation platform, an admin console) — concept-first, validated through restatement and stress-tests, grounded in verbatim-observed artifacts; use when a user asks "explain this system", "help me understand this codebase", "teach me how this works", "walk me through these workflows". (2) GENERATES a standalone, interactive onboarding course app from a repo (Phase 4) — hand-authored from a teaching knowledge base, or via an autonomous loop on a cold repo with NO knowledge base — and VERIFIES it: every snippet grounded against source, every claim adversarially checked, teaching measured with a simulated learner (the proof report); use when asked to "build/generate an onboarding course/app for <system>", "course this repo", or "verify/prove the course".
 ---
 
 # System Explainer
@@ -123,6 +123,7 @@ If Phase 0 produced a context index, Phase 1 should consult it as it goes — th
 Always start by asking the user explicitly which sources to draw from. Do not assume. Examples of source types and what to do with each:
 
 - **Live web app**: ask for the URL and any credentials *the user wants to provide directly in chat*. Plan to systematically traverse nav items, tabs, and modals; capture screenshots and field names.
+- **Live tool / orchestration platform** (a workflow builder, automation platform, low-code tool, admin console — anything whose "source" is a canvas or configuration UI rather than files, e.g. n8n, Zapier, Airflow, Retool): the running tool IS the spine. Plan to open every workflow/board/config surface through whatever channel reaches it (browser tools, the platform's MCP/API) and **copy names verbatim** — workflow titles, node labels, trigger names, connection names — exactly as they appear on the canvas. There is no repo to fall back on, so the labels you capture here are the only ground truth the teaching will ever have.
 - **Codebase**: ask for the repo path or directory. Plan to read `README`, top-level config files (`package.json`, `pyproject.toml`, `go.mod`, etc.), entry points, then trace from there. Use `grep`/search to find domain terms; use directory structure to infer module boundaries.
 - **API specification**: ask for the path to the OpenAPI/Swagger/GraphQL schema or the docs URL. Read the schema in full; the resource names and their relationships are usually the entity model.
 - **Documentation only**: ask for the docs URL or path. Read structurally — table of contents reveals the system's mental model as the authors see it, which is a strong starting point.
@@ -130,6 +131,8 @@ Always start by asking the user explicitly which sources to draw from. Do not as
 - **Nothing but the user's knowledge** (interview-only): the user is the source. Ask structured questions in the order described in section 1.4.
 
 If the user says "use whatever you have access to" without specifying, infer from the working environment (a running browser → web app, a repo checkout → codebase, etc.) and confirm before proceeding. Never invent a source.
+
+**Reality outranks intent.** Sources come in two kinds: **reality sources** (the running system, the code, the live canvas — what the system *does*) and **intent sources** (PRDs, specs, design docs, roadmaps — what the system is *supposed to do*). When both exist, **the reality source is the spine by default** and the intent source is supplementary — a spec describes a system that may not exist yet, and teaching it as if it runs produces a confident but idealized model. Confirm this default with the user, then tag every claim with its provenance: **observed** (from the reality spine), **specified** (from an intent source), or **inferred** (your reasoning). Where the built thing diverges from the spec, that divergence is a first-class finding — record a **spec-vs-built diff** (each divergence is a gotcha by definition) rather than silently teaching either side.
 
 ### 1.2 — Skim before deep-reading
 
@@ -167,11 +170,17 @@ Aim for 5–15 entities. If you have more than 20, you're capturing implementati
 
 For each relationship, identify the *cardinality* (one-to-one, one-to-many, many-to-many) and the *direction* (which entity references which). Cardinality mistakes are the most common source of confusion later.
 
-### 1.6 — Identify the verbs
+**Every component earns its boundary.** For each major *component* in the map (a workflow, service, module, job, table — anything that exists as a separately-named thing), also capture **why it is its own thing rather than part of its neighbor**: a different trigger, a different cadence, a different owner, a different failure domain, bespoke logic the general path can't absorb. This is the question learners actually ask ("why can't these be one workflow?") and the catalog never answers unprompted. If the boundary rationale isn't discoverable from the sources, record it as `whySeparate: unknown` and log an SME question in `gotchas.md` — an unexplained boundary is a design question, not a blank to skip.
+
+**Capture names verbatim — the names ledger.** Every entity, component, and verb entry carries a `label:` field holding the **exact observed string** (the workflow title on the canvas, the class name in the file, the resource name in the spec) plus a locator (file:line, canvas/menu path, endpoint). Teaching, diagrams, and quizzes must use ledger labels byte-for-byte — a paraphrased name ("the first workflow", "the extraction flow") reads as fluent and is untraceable the moment the learner opens the real system. If you catch yourself writing a name you did not copy, go observe it.
+
+### 1.6 — Identify the verbs, then trace the unit of work end-to-end
 
 Entities alone are static. The system's behavior is in the verbs — the operations that happen between entities. For each major verb, capture: what triggers it (user action, scheduled job, external event, another verb), what entities it touches, what state changes, and what failure modes exist.
 
 The named workflows or exception queues in an app, the public methods on a class, the endpoints on an API, the commands in a CLI — these are usually where the verbs live.
+
+**The primary trace (mandatory for unit-of-work systems).** If the system's components are steps that operate on a *moving unit of work* — a document, an order, a request, an event, a record flowing through pipelines/workflows/services — then the verbs are not enough: produce **"the life of one X"**, a single end-to-end trace of one concrete unit from its entry trigger through every component it touches to its terminal state, in time order, naming each hand-off with **ledger labels**. ("A new document lands → *[exact trigger name]* fires → *[exact workflow name]* extracts → dedup check → stored as *[entity]* → surfaced in *[exact UI surface]*.") This is the connective tissue a per-domain catalog structurally never produces, and it is the mental model an engineer actually asks for ("how do these connect?"). Persist it (see 1.8) and teach it early (Phase 2 Step 3). Systems without a moving unit (a library, a pure config store) are exempt — don't force a trace where nothing flows.
 
 ### 1.7 — Pull in adjacent domain context only when load-bearing
 
@@ -188,8 +197,9 @@ Persist what you've learned to disk under `references/<system-name>/` so future 
 - **`context-index.md`** — the catalog of every relevant context source for this system (created in Phase 0). The first stop for any agent or future session needing to know what context exists. Maintain alongside teaching — append entries when new context surfaces.
 - `one-job.md` — the single sentence, plus any secondary jobs explicitly set aside
 - `actors.md` — external actors and their pre-existing relationships
-- `entities.md` — internal entities, fields, example values, relationships, cardinality
-- `verbs.md` — major operations, triggers, state changes, failure modes
+- `entities.md` — internal entities, fields, example values, relationships, cardinality, **verbatim `label:` + locator (the names ledger)**, **`whySeparate:` boundary rationale per component**, and a **provenance tag per claim** (`observed` / `specified` / `inferred`)
+- `verbs.md` — major operations, triggers, state changes, failure modes (same ledger + provenance conventions)
+- **`trace.md`** — the primary end-to-end trace(s): "the life of one X" from entry trigger to terminal state, each hand-off named with ledger labels (see 1.6). For unit-of-work systems this is the highest-leverage teaching artifact in the KB. When both an intent source and a reality source exist, this file also holds the **spec-vs-built diff** (each divergence cross-logged as a gotcha).
 - `navigation.md` — for live apps: verified click paths to reach each entity. For codebases: file paths and key functions. For APIs: endpoint paths.
 - **`gotchas.md`** — non-obvious behaviors, edge cases, design questions, ambiguities, and "needs SME validation" items discovered along the way (see emphasis below)
 - **`learning-log.md`** — the teaching journey: what domains have been taught and locked, what corrections happened during teaching, what remains outstanding (see "Maintain the learning log" below)
@@ -262,16 +272,21 @@ Before producing any teaching content for a new domain, dispatch a **grounding s
    - The files / paths / endpoints you expect to be relevant
    - The specific behaviors, options, statuses, or flows you are uncertain about
 
-2. **Dispatch the grounding extractor: an `Explore` agent whose prompt is the full content of `~/.claude/skills/system-explainer/subagents/teaching-grounding-extractor.md`.** (Explore cannot Edit/Write, preserving the read-only guarantee the prompt file's `tools:` line declares.) The prompt file encodes the verbatim-quote requirement, the structured output format, and the strict no-inference rules. Append to it:
+2. **Dispatch the grounding extractor — the spine's CHANNEL picks the mechanism, never whether grounding happens.**
+   - **File spine** (codebase, on-disk docs, schema files): an `Explore` agent whose prompt is the full content of `~/.claude/skills/system-explainer/subagents/teaching-grounding-extractor.md`. (Explore cannot Edit/Write, preserving the read-only guarantee the prompt file's `tools:` line declares.)
+   - **Live spine** (a running app, a workflow canvas, an admin console — observed through browser tools or a platform MCP/API): `Explore` cannot drive those channels, so either the **teacher grounds inline** with the browser/MCP tools, or dispatch a `general-purpose` agent with tool access — in both cases following the SAME prompt file's rules (verbatim capture, no inference, structured output), with "read the files" replaced by "open every relevant surface through the channel." The non-negotiable: **labels are copied, not recalled** — every workflow title, node label, field name, and status string is captured exactly as displayed, into the names ledger.
+   - **No channel reaches the spine** (no repo, no access, tool not connected): grounding is **BLOCKED, not deferred**. Say so explicitly in chat, teach only with every claim marked as *hypothesis* (provenance `inferred`/`specified`), and treat the first moment of access as a mandatory re-grounding event. "We'll ground later" silently becomes "we never grounded" — the n8n failure mode this rule exists to prevent.
+
+   The prompt file encodes the verbatim-quote requirement, the structured output format, and the strict no-inference rules. Append to it:
    - The domain name
-   - The source files/paths to read (the spine for this domain)
+   - The source files/paths **or live surfaces** to observe (the spine for this domain)
    - The specific behaviors you're uncertain about
    - **A pointer to the context index** at `~/.claude/skills/system-explainer/references/<system>/context-index.md` (if it exists)
    - **Explicit pointers to prior locked knowledge** so the agent can flag contradictions: `entities.md` (if entities for this domain are already locked), `gotchas.md` (open questions and prior corrections), and `learning-log.md` (teaching history). Even if you don't expect contradictions, passing these unlocks the agent's "Contradictions with Prior Knowledge Base" output section, which is where high-value cross-references live.
 
-   The agent consults the context index, reads the prior knowledge files, reads the source files, and returns the structured grounded summary including any contradiction flags.
+   The agent consults the context index, reads the prior knowledge files, observes the spine, and returns the structured grounded summary including any contradiction flags.
 
-   Fallback: if the prompt file is missing, dispatch `Explore` (code-only domains) or `general-purpose` (cross-file synthesis) and reproduce the structured output requirements inline. But the prompt file is preferred — its behavior is encoded once and consistent across sessions.
+   Fallback: if the prompt file is missing, dispatch `Explore` (file spines) or `general-purpose` (live spines / cross-file synthesis) and reproduce the structured output requirements inline. But the prompt file is preferred — its behavior is encoded once and consistent across sessions.
 
 3. **Receive the subagent's report.** This becomes the **ground truth** for the rest of this domain's teaching. The teacher commits to it.
 
@@ -290,6 +305,8 @@ Distill what the system does into one sentence using only the actors from Step 1
 ### Step 3 — Offer a minimum mental model
 
 Give 3–5 internal entities and the verbs between them. Small enough to hold in working memory. The model should be testable — the user should be able to predict what fields, files, or endpoints probably exist, just from the model.
+
+**For unit-of-work systems, the trace IS the model.** When components are steps operating on a moving unit (see 1.6), do not open with a static noun list — open with **"the life of one X"**: one concrete unit traced from entry trigger to terminal state, every hand-off named with ledger labels, and hang the entities off the trace as they appear. A learner who thinks in flows (any engineer asking "how do these connect?") gets the connective tissue first; the catalog is reference material, not the model. Include the *why* for any boundary a newcomer would question ("this step is its own workflow because …") — pulled from `whySeparate`, not improvised.
 
 ### Step 4 — Have the user restate the model
 
@@ -313,6 +330,8 @@ This rule applies retroactively too. When the user observes something in the sys
 
 Pose 3–4 hypothetical scenarios that require applying the model. Good stress tests probe the seams: what happens when an actor changes, when a relationship is added, when a value updates, when a join fails, when a verb encounters an error. Grade with specific corrections, not generic praise.
 
+**The merge test is a canonical probe.** For any system with multiple named components, one stress test should be: *"could component X and component Y be merged into one? What would break?"* Answering it forces the boundary rationale (`whySeparate`) into the open — different triggers, cadences, owners, or bespoke logic — and if neither you nor the user can answer, that is a real finding for `gotchas.md`, not a failed quiz. Learners ask this question anyway; ask it first.
+
 If the user gets the structure right but misses an industry-standard pattern, surface that as a sharpening, not a failure.
 
 **Stress tests are reciprocal — they reveal teacher gaps too.** When the user pushes on a scenario and exposes an inconsistency in your own framing or in the system's design, do not defend the original explanation. Instead:
@@ -329,7 +348,7 @@ Before declaring a domain locked and moving on, dispatch a fact-check subagent t
 
 **Procedure:**
 
-1. **List the specific factual claims made during the teaching cycle.** Not interpretive claims, factual ones — e.g., "X has four statuses: A/B/C/D," "the cron fires at Y frequency," "Z is filtered by W."
+1. **List the specific factual claims made during the teaching cycle.** Not interpretive claims, factual ones — e.g., "X has four statuses: A/B/C/D," "the cron fires at Y frequency," "Z is filtered by W." **Include the names you used**: every entity/component/workflow name that appeared in teaching is itself a claim, checked byte-for-byte against the names ledger (a paraphrased label is a ✗, not a style choice).
 
    **Learner-from-zero edge case:** if you were operating under the Phase 1.9 exception (user is genuinely new to the domain and the spine was a working hypothesis), some "claims" you made may have been speculative framings rather than confident assertions. Mark these explicitly in the list as `[hypothesis]` so the fact-checker can distinguish "the teacher said X with confidence and was wrong" from "the teacher hypothesized X and the source code agrees/disagrees." Both are valuable signals, but they require different responses — confident-wrong = correction + apology + gotcha; hypothesis-wrong = sharpening + model update.
 
@@ -539,6 +558,10 @@ Do **not** repeat the same words louder or in more detail. If they didn't unders
 - **Domain-transition without re-grounding**: moving from one domain to the next within Phase 2 (e.g., Customer → Invoice → Bundle) without running a fresh Step 0 grounding pass. Each new domain has its own files, its own ambiguities, its own places where industry priors lead astray. Carrying over conviction from the prior domain into the new one is how hallucination compounds across a session.
 - **Pulling in domain context preemptively**: don't lecture about the domain before the software needs it. Wait until a software behavior would be unmotivated without it, then introduce the minimum required.
 - **Using internal entity names as actors**: if your "external actor" only exists because the system defines it, it's not an actor. Try again.
+- **Spec-as-spine**: teaching from the PRD/spec/design doc when a running system or code exists. The spec is what the system is *supposed* to do; only the reality source shows what it *does*. The tell: a confident, tidy model with no rough edges — real systems always have divergences, and an explanation without any hasn't looked. Tag provenance; diff spec vs built.
+- **Paraphrased labels**: calling things "the first workflow" or reconstructing names from memory instead of copying them off the canvas/file/spec. Fluent-sounding, untraceable, and wrong often enough to destroy trust the moment the learner opens the real system. Every taught name comes from the names ledger byte-for-byte.
+- **Catalog without a trace**: producing a per-domain inventory of components and never the "life of one X" runtime story. For a unit-of-work system the flow IS the mental model; a learner who has to ask "but how do these connect?" more than once has caught the skill skipping 1.6's primary trace.
+- **Unexplained boundaries**: cataloging N separate components without ever answering why each is separate from its neighbor. "Why can't these be one workflow?" should be answered by the model (`whySeparate`) before the learner has to ask it — and if the sources don't say, that's a logged SME question, not silence.
 
 ## Example Session Shapes
 

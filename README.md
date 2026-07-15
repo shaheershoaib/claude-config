@@ -11,10 +11,41 @@ and so I can sync it across my own machines.
 ## Layout
 
 ```
-skills/     21 skills (the dev pipeline, design tooling, utilities)
+skills/     24 skills (dev pipeline, planning, design tooling, utilities)
 agents/     5 subagents (auditors + validators + test runner)
 hooks/      pre-compact snapshot hook (pairs with system-explainer)
 CLAUDE.md   the pipeline harness — how work gets routed through skills + verified
+```
+
+## How work flows
+
+Every dev task routes through a matching skill, then each change crosses **one shared verification gate**. (This diagram renders directly on GitHub.)
+
+```mermaid
+flowchart TD
+    W["Work arrives<br/>chat asks / tickets / a plan doc"] --> Q{What kind?}
+    Q -->|bug, ticket, feedback| SHIP[ship]
+    Q -->|new feature| BR["brainstorming -> writing-plans"]
+    Q -->|port from a prototype| PP[proto-port]
+    Q -->|migration / sweep| FO["fanout -> per-site"]
+    Q -->|2+ items at once| FB["fanout -> parallel batch"]
+
+    GR["graphify<br/>codebase graph"] -. coupling hints .-> FO
+    GR -. coupling hints .-> FB
+    GRILL["grill-with-docs<br/>stress-test the plan"] -. sharpen first .-> BR
+
+    SHIP --> GATE
+    BR --> GATE
+    PP --> GATE
+    FO --> GATE
+    FB --> GATE
+
+    subgraph GATE ["the shared gate - every change crosses it"]
+      direction LR
+      PC[pre-commit] --> GC[git-commit] --> CI["PR + CI-green"] --> MG[rebase-merge] --> DV[deploy-verify] --> VR["parity-receipt<br/>verify by value"]
+    end
+
+    GATE --> DONE(["reported symptom observably gone"])
 ```
 
 ## Install
@@ -41,7 +72,8 @@ agent's frontmatter) documents itself — that's the source of truth. The `CLAUD
 - `graphify` — a local AST knowledge graph of a codebase (what-renders-what).
 - `pre-commit` — runs the project's real gate commands (typecheck / lint / tests) fail-closed before any "done" claim.
 - `git-commit`, `pr-creator`, `github-pr-review` — identity-aware commits, PR creation, PR review via the gh CLI.
-- `parity-builder` / `parity-sweep` — build/port a surface from a prototype to leaf-level parity, and verify it.
+- `proto-port` — build/port a surface FROM a prototype (the proto code is the spec) to leaf-level parity. *(was `parity-builder`)*
+- `parity-receipt` — verify a built UI against its prototype without missing behind-a-click detail (dropdowns, modals, row-click destinations). *(was `parity-sweep`)*
 - `session-handoff` — a structured end-of-session summary so a fresh session continues.
 - `setup-audit` — grades your `~/.claude` setup and catches silent breakage.
 
@@ -55,6 +87,12 @@ agent's frontmatter) documents itself — that's the source of truth. The `CLAUD
 - `watch` — watches a video and answers questions about it.
 - `system-explainer` — teaches how an unfamiliar system works; can generate a standalone onboarding web app (ships a public **Zustand** demo course).
 - `find-skills` — discovers/installs skills.
+
+### Skills — planning & domain modeling
+A planning trio by [@mattpocock](https://github.com/mattpocock) (install via `npx skills add mattpocock/skills@<name>`; bundled here for convenience, credit to him):
+- `grill-with-docs` — a relentless interview that stress-tests a plan or design and captures ADRs + a glossary as you go.
+- `grilling` — the interrogation engine: grill a plan / decision / idea until the thinking is sharp.
+- `domain-modeling` — pin down the ubiquitous language and record architectural decisions.
 
 ### Agents (`agents/`)
 Generic dev subagents you can dispatch: `code-auditor` (quality/maintainability), `dep-auditor`

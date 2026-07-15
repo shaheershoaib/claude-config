@@ -58,15 +58,23 @@ If a needed fact is missing, ask - do not guess. **Bootstrapping a new project?*
 `references/project-facts-template.md` (in this skill's directory) to
 `<project>/.claude/skills/<project>-loop/SKILL.md` and fill in the
 placeholders - it carries the section skeleton this loop expects, including
-the G5 terminal-action and G6 twin-surface hooks.
+the terminal-action and twin-surface hooks.
 
 ---
 
 ## The guardrails (more important than the steps)
 
-### G0 - Pin the BEFORE-state FIRST; the acceptance observable IS your test
+**Gate definitions live in the environment's verification-gates layer, not
+here.** When a verification plugin/config is bootstrapped into the setup (a
+gates skill, close-out hooks/referee, a receipt + status taxonomy), that layer
+is CANONICAL for what each gate requires and for the evidence a close-out must
+carry - this loop assumes it is active, does not restate its spec, and defers
+to it wherever the two overlap. What follows is only the operational
+discipline the LOOP itself needs to run its steps.
+
+### Pin the BEFORE-state FIRST; the acceptance observable IS your test
 Before touching code, OBSERVE the target surface as it is and capture what you
-saw - that observation is the exact thing your by-value check (G1, step 9) must
+saw - that observation is the exact thing your by-value check (step 9) must
 later show CHANGED. "My change is deployed/live" is NOT verification: your change
 being live is not the same as the acceptance observable being true. (Proof: a
 "modal cut off" report was read as a vertical footer-clip; a height cap was
@@ -74,7 +82,7 @@ built, gated, deployed, and "verified by value" that the cap was applied - all
 green - while the real bug was the modal being too NARROW. The wrong axis
 shipped; only the reporter caught it.)
 
-G0 has TWO forms - pick by the work-item's shape:
+The pin has TWO forms - pick by the work-item's shape:
 - **REGRESSION / FIX (something is wrong):** reproduce the symptom. The observed
   failure IS the acceptance test; step 9 must show it GONE.
 - **ADDITIVE / CHANGE (something new or different is wanted):** observe the
@@ -89,7 +97,7 @@ G0 has TWO forms - pick by the work-item's shape:
 This gate is the OBSERVABLE side - pin it so step 9 can re-check it; finding WHY
 a bug happens (so the fix addresses the cause, not the symptom) is a SEPARATE
 discipline, `superpowers:systematic-debugging` at step 4, which REUSES this same
-reproduction. Shorthand: G0 makes you verify the right thing;
+reproduction. Shorthand: the pin makes you verify the right thing;
 systematic-debugging makes you fix the right thing - they share only the
 reproduce step, not the job.
 
@@ -114,7 +122,7 @@ acceptance line.
 - "Obvious enough to skip" = obvious CAUSE + an unambiguous, graphify-confirmed fix
   LOCATION, NOT an obvious-looking symptom. The classic wrong-fix is "looked obvious,
   patched the obvious thing, missed that the real cause was a different surface" (the
-  G4 wrong-surface miss graphify exists to catch).
+  wrong-surface miss graphify exists to catch).
 - Reporter/tester-sourced symptom -> repro is MANDATORY, never skipped (same rigor as
   read-the-full-thread / pin-the-exact-flow).
 - Skipping end-to-end repro is NOT skipping evidence: a cheap regression/unit test
@@ -208,65 +216,42 @@ SHIP claim); here the PREMISE is what's unverified. Guard:
   executed without re-observing - the inference never got re-tested against the
   live surface it was about.)
 
-### G1 - Assert the rendered VALUE, never presence or the placeholder
-A grey placeholder showing the expected text is a FAIL. "An input exists" is
-not a pass. Read `input.value` / the selected option / `checked` / the rendered
-number via the DOM on the **deployed** build. Uncontrolled form libraries (e.g.
-React Hook Form `defaultValues`) frequently paint correctly in dev + jsdom and
-empty in production - "the test passes" and "the screenshot looks right" are
-both insufficient. The `parity-sweep` skill is the methodology in depth; use
-its scoped mode for single-fix verification.
-
-### G2 - Pin the EXACT flow/component the reporter means
-Apps grow parallel flows for the "same" feature (an onboarding wizard AND a
-detail-page dialog; a summary card AND a drill-in page), each with its own copy
-of the logic. Fixing or verifying the wrong one looks like progress and ships
-nothing. Reproduce the reporter's path before touching code; when ambiguous,
-ask.
-
-### G3 - Verify on the build that contains your commit
-Never verify against a stale deploy. Confirm the deployed artifact's commit sha
-matches your push before driving the UI (step 8's polling procedure). A green
-check on the old build proves nothing.
-
-### G4 - The fix must land on the surface the reporter SEES
-Code search finds *a* component that renders the words; the reporter's screen
-may be a different one (Today-proof: a premium-type badge was first added to a
-per-invoice expand panel when the visible surface was the page-level card).
-After deploying, drive the reporter's actual screen - if your change isn't
-visible there, you fixed the wrong surface. Revert the wrong-surface change
-rather than leaving two competing copies.
-
-### G5 - Drive the changed flow to its TERMINAL action
-Changing one step of a multi-step flow (wizard, checkout, pipeline) is not
-verified at that step. Drive the flow to its terminal action (Activate /
-submit / save) on the deployed build, down the path a real user takes -
-including ACCEPTING pre-filled defaults rather than re-typing them. The state
-seams between steps (local form -> shared store -> final validator / submit
-payload) are where fixed-one-broke-another lives: a step that validates its
-own form while the final gate validates the shared store passes Next and fails
-the terminal action (Proof: a restructure seeded a policy form's broker/agency
-from earlier steps; they painted and passed Next but never synced to the
-store, so Activate rejected "Required" fields the reporter could see filled -
-filed as a new High blocker one day later). When hand-driving the whole flow
-is slow or fragile, construct the state through the app's own API (create a
-draft/record in the target state, resume it) and assert the persisted state
-by value.
-
-### G6 - Sweep the changed pattern's PARALLEL surfaces before closing
-G2's twin problem, on the output side: apps implement the same affordance
-separately in sibling flows (two wizards' preview cards, nav badges, contact
-rows, input masks). A fix that changes a PATTERN on one surface - icon
-placement, label, mask, color convention - creates a reporter-visible
-inconsistency on every twin still carrying the old pattern, and that becomes
-the next ticket (Proof: "add an Edit label" -> reopened "the account section
-lacks it" -> reopened "now move it left to match the customer screen" - three
-cycles for one affordance). Before closing: enumerate the pattern's parallel
-instances (grep the component/icon/classname; if a graphify graph exists, ask
-"what else renders this") and apply the same change or note the divergence in
-the ticket reply as a conscious deferral. Prefer fixing consistency by SHARING
-the implementation (extract the component) over copying the patch - twins that
-share code cannot drift.
+### Verify what shipped, where it shipped, all the way down
+The gates layer holds the full spec; what step 9 operationally requires:
+- **Assert the rendered VALUE, never presence or a placeholder** - read
+  `input.value` / the selected option / `checked` / the rendered number via
+  the DOM on the **deployed** build. Uncontrolled form defaults paint in
+  dev + jsdom and empty in production; "the test passes" and "the screenshot
+  looks right" are both insufficient. The `parity-receipt` skill is this
+  methodology in depth; use its scoped mode (Mode 1) for single-fix
+  verification.
+- **Verify on the build that contains YOUR commit** - confirm the deployed
+  artifact's sha matches your push before driving the UI (step 8's polling
+  procedure); a green check on the old build proves nothing.
+- **Fix and verify the exact surface/flow the REPORTER means** - apps grow
+  parallel implementations of the "same" feature (an onboarding wizard AND a
+  detail-page dialog; a summary card AND a drill-in page), and code search
+  finds *a* component, not THE screen. Reproduce the reporter's path before
+  touching code (when ambiguous, ask); after deploying, drive their actual
+  screen - if your change isn't visible there you fixed the wrong surface:
+  revert it rather than leave two competing copies.
+- **Drive the changed flow to its TERMINAL action** (Activate / submit /
+  save) on the deployed build, down the path a real user takes - including
+  ACCEPTING pre-filled defaults rather than re-typing them. The state seams
+  between steps (local form -> shared store -> final validator / submit
+  payload) are where fixed-one-broke-another lives: a step can validate its
+  own form, pass Next, and still fail the terminal action against the shared
+  store. When hand-driving the whole flow is slow or fragile, construct the
+  state through the app's own API and assert the persisted state by value.
+- **Sweep the changed pattern's PARALLEL twins before closing** - a pattern
+  change on one surface (icon placement, label, mask, color convention)
+  creates a reporter-visible inconsistency on every sibling still carrying
+  the old pattern, and that becomes the next ticket. Enumerate the parallel
+  instances (grep the component/icon/classname; if a graphify graph exists,
+  ask "what else renders this") and apply the same change or note the
+  divergence as a conscious deferral. Prefer SHARING the implementation
+  (extract the component) over copying the patch - twins that share code
+  cannot drift.
 
 ---
 
@@ -299,7 +284,7 @@ and the bar binds either way. Do not try to out-argue it.
     missing row, new control) -> a LIVE DRIVE on the DEPLOYED build to the
     failing (or new) action. A DB query, a code read, CI, and a passing unit
     test are CORROBORATION, never the verification - the backend can be correct
-    while the FE is broken (G0-(D)).
+    while the FE is broken (the diagnosis rules above).
   - DATA / seed -> a by-value staging query (DB proxy / API) PLUS a sha-confirm
     that the deployed build is the one you checked.
   - ARTIFACT / API / CLI (a command's output, a library's return, a generated
@@ -319,8 +304,9 @@ and the bar binds either way. Do not try to out-argue it.
   bar is NORMATIVE - it binds with or without tooling. An environment MAY wire
   an external close-out referee (a Stop hook / CI check that blocks a
   fixed/verified claim lacking evidence); this skill neither requires nor names
-  one - the project/environment layer declares the concrete referee, if any
-  (see the project-facts template's "Close-out referee" slot). What a
+  one - the environment layer (e.g. a bootstrapped verification plugin and its
+  per-project config) declares the concrete referee, if any (see the
+  project-facts template's "Close-out referee" slot). What a
   well-formed referee checks, and what you must show REGARDLESS: after the last
   merge, BOTH (1) a BINDING to the verification target (a navigate to the app
   host / a deployment read / a staging query / a fresh artifact run at the
@@ -355,12 +341,12 @@ and the bar binds either way. Do not try to out-argue it.
      the work-set even if the user named only one.
    - **TYPE each item; non-fix shapes ROUTE, but everything stays in ONE
      plan.** Fixes/regressions and small fully-specifiable additions run this
-     loop natively (G0 picks the matching form). An item that needs real DESIGN
+     loop natively (the before-state pin picks the matching form). An item that needs real DESIGN
      (its shape is undecided) goes to `superpowers:brainstorming` /
      `superpowers:writing-plans` FIRST, and its output - specified items, an
      MSP-sliced plan - re-enters THIS work-set as items. A prototype/design
-     -source port is a `parity-builder` MSP. A mechanical many-site sweep runs
-     natively, sweep-shaped (census first - see G0). Routing changes WHO
+     -source port is a `proto-port` MSP. A mechanical many-site sweep runs
+     natively, sweep-shaped (census first - the census IS the before-state pin). Routing changes WHO
      designs/builds an item, never the plan or the gates: every item, routed or
      native, appears in the same `fanout` items JSON (a design item is a
      wave-0 producer; its impl items declare `after` it) and crosses the same
@@ -398,20 +384,19 @@ and the bar binds either way. Do not try to out-argue it.
    **If triage GROWS the work-set past one actionable item (comments spawned
    new asks), step 0's rule applies NOW: run `fanout` before touching any
    fix, THEN run the per-item steps below per that plan.**
-2. **Pin the flow** (G2). If the project has a graphify graph
+2. **Pin the flow.** If the project has a graphify graph
    (`graphify-out/` exists - see `graphify`), query it FIRST to find which
    component renders the reporter's surface and whether parallel
    implementations of the feature exist (`graphify query "what renders
-   <surface>"`, or read `graphify-out/GRAPH_REPORT.md`). **Also query
-   trajectory memory FIRST** (the `trajectory-kb` MCP, if available):
-   `query_trajectory({ surface, text: <symptom keyword> })` to see what was
-   already tried on this surface and what failed - a prior `what_failed`
-   ("capped height - wrong axis") is the G0 wrong-axis / G4 wrong-surface trap
-   pre-recorded,
+   <surface>"`, or read `graphify-out/GRAPH_REPORT.md`). **Also query the
+   trajectory memory FIRST** (if the setup provides one - see "Cross-loop
+   memory" below): what was already tried on this surface and what failed - a
+   prior recorded failure ("capped height - wrong axis") is the wrong-axis /
+   wrong-surface trap pre-recorded,
    surfaced before you spend a build on it. graphify answers "what renders X"
-   (structure); trajectory-kb answers "what did we try on X and what happened"
-   (history). Then identify the
-   exact component/route, pin the G0 BEFORE-STATE live (reproduce the symptom,
+   (structure); the trajectory memory answers "what did we try on X and what
+   happened" (history). Then identify the
+   exact component/route, pin the BEFORE-STATE live (reproduce the symptom,
    or capture the surface without the change), and **PRE-REGISTER the
    acceptance line** - write the exact observable-that-must-change into the
    ticket / work-set notes ("Acceptance: clicking Generate advances to Step
@@ -423,16 +408,16 @@ and the bar binds either way. Do not try to out-argue it.
    use a plain branch instead - see Proportionality; a batch always worktrees.)
 4. **Implement.** For a non-trivial bug, run `superpowers:systematic-debugging`
    first - its Iron Law (no fix without root-cause investigation) is the one
-   discipline the gates do NOT cover: G0 already reproduced the symptom for the
-   acceptance test, so REUSE that as its Phase 1 (don't reproduce twice) and spend
+   discipline the gates do NOT cover: the before-state pin already reproduced the
+   symptom for the acceptance test, so REUSE that as its Phase 1 (don't reproduce twice) and spend
    the effort on WHY - fix the cause, not the symptom. Recurring traps worth checking
    explicitly:
    - `'' ?? fallback === ''` but `'' || fallback === fallback` - empty-string
      defaults need `||`.
    - A form that errors with "required information" while every visible field
      is filled has a HIDDEN required field being stamped empty.
-   - Prefer controlled inputs over uncontrolled defaultValues (G1's render gap).
-   - Two-sources-of-truth divergence (G5's code shape): any value that enters a
+   - Prefer controlled inputs over uncontrolled defaultValues (the render gap).
+   - Two-sources-of-truth divergence (the terminal-action seam): any value that enters a
      form WITHOUT a change event - seed, default, async hydration - must be
      explicitly synced to the shared store the final validator reads. When
      adding a seed/prefill, grep for the store's readers (final validation,
@@ -455,7 +440,7 @@ and the bar binds either way. Do not try to out-argue it.
    `pre-commit` gate stays as a fast pre-check. (Project facts - branch names, the
    required check's name, the merge method, the author-gate - come from the
    project skill.)
-8. **Ship to the verification target + confirm it carries your sha** (G3 - the
+8. **Ship to the verification target + confirm it carries your sha** (the
    deploy-verify step). Web app: poll the platform's deployment status until it
    is READY **and** reports your merged sha. Deploys take time (roughly a
    minute to several), so background-wait and re-check instead of hammering -
@@ -466,13 +451,13 @@ and the bar binds either way. Do not try to out-argue it.
    service with no auto-deploy: build/install the artifact FROM the merged
    integration sha (fresh venv/install, never your worktree) - that artifact IS
    the "deployed build" the next step verifies.
-9. **Verify by value on the target** (G1 + G4), driving the reporter's exact
-   flow, then the flow's terminal action (G5) and the changed pattern's twins
-   (G6). **Capture the proof as you verify - a required artifact, not a nicety
+9. **Verify by value on the target**, driving the reporter's exact
+   flow, then the flow's terminal action and the changed pattern's twins.
+   **Capture the proof as you verify - a required artifact, not a nicety
    (any wired close-out referee checks for it):** for a UI/behavior item, take a SCREENSHOT
    of the deployed surface AND read the rendered value via the DOM (the
-   screenshot is the shareable proof you looked; the DOM read is the actual G1
-   assertion - a screenshot alone can show a grey placeholder and pass the
+   screenshot is the shareable proof you looked; the DOM read is the actual
+   by-value assertion - a screenshot alone can show a grey placeholder and pass the
    eye); for a data item, the by-value staging query output plus the
    deployment sha-confirm IS the artifact; for an artifact/API item, the
    captured command run / endpoint response (at the merged sha) IS it. Re-run
@@ -496,10 +481,10 @@ and the bar binds either way. Do not try to out-argue it.
     discovered while verifying: file/flag it, never scope-creep the current
     fix or silently drop it (no tracker? list it as a FLAGGED item in the
     close-out report for the user's disposition - same rule, different
-    medium). **Then record the trajectory** - the append contract, the outcome
-    enum, and the append-on-EVERY-exit rule live in "Trajectory memory" below
-    (canonical). Short form: `append_trajectory(...)` with `outcome` = the
-    exact G0 status you shipped, failures and blocked exits recorded too; the
+    medium). **Then record the trajectory, if the setup provides a trajectory
+    memory** - the touchpoints live in "Cross-loop memory" below. Record the
+    outcome exactly as shipped (verified / downgraded / reverted / blocked),
+    failures and blocked exits recorded too; the
     only exit that skips the append is a loop genuinely paused mid-flight.
 11. **Clean up**: remove the worktree, delete the branch. If the project has a
     graphify graph and you changed code, run `graphify update .` to keep it
@@ -523,8 +508,8 @@ logic / contract / data-shape change (copy, a label, a comment, a style token,
 docs); <= ~5 lines across 1-2 files; no high-risk-marker surface. When in
 doubt -> standard lane.
 - **LITE KEEPS (non-negotiable):** a branch + PR + CI-green (shared policy,
-  never bypassed), the G0 before-state pin + a one-sentence acceptance line,
-  ONE by-value check on the verification target, the G6 twin grep (labels and
+  never bypassed), the before-state pin + a one-sentence acceptance line,
+  ONE by-value check on the verification target, the twin grep (labels and
   typos have twins), and an evidence-cited close-out.
 - **LITE WAIVES:** fanout (it is a single item), recon scaffolding, the
   graphify/trajectory queries (a grep suffices), the isolated worktree when
@@ -581,7 +566,8 @@ background build agent per MSP (leaves within a big MSP fan out too), each in
 its OWN worktree (step 3) on its assigned tier, while you do the
 trust-boundary work yourself - review each diff, re-run the gates fresh,
 commit/push, merge, confirm each deploy/artifact. Verification is per-item in
-SCOPE (G1/G4/G5 are never batched away) but PIPELINED in TIME - an item
+SCOPE (the by-value, right-surface, and terminal-action checks are never
+batched away) but PIPELINED in TIME - an item
 verifies the moment ITS target is live, never saved for a serial end-sweep.
 Items sharing files are ONE MSP in one worktree. Never let agents push, merge,
 or close items themselves - implementation parallelizes; gating, shipping, and
@@ -612,7 +598,8 @@ dispatch/review MSP B's build, scaffold the next wave's items, or do the next
 diff review - polling is a background activity, not a foreground task. And BATCH
 the merges: when several PRs are CI-green together, merge them as a group so they
 ride ONE deploy -> ONE deploy-verify sha-confirm -> per-item by-value checks
-(G1/G4/G5 stay per-item; the deploy-confirm is per-DEPLOY). Exception: a
+(by-value/right-surface/terminal-action checks stay per-item; the
+deploy-confirm is per-DEPLOY). Exception: a
 high-blast-radius change (money/ledger, auth, destructive migration) merges ALONE
 so a revert stays clean - the orchestrator calls it.
 
@@ -659,83 +646,80 @@ cite the value) and
 the authed deployed-UI live-drive (a single authenticated session). This shape
 is work-type-agnostic - net-new builds and ports verify the same way.
 
-## Trajectory memory (cross-loop learning)
+## Cross-loop memory (optional)
 
-The loop's two memory touchpoints, served by the `trajectory-kb` MCP (a global,
-repo-tagged, append-only store - it aggregates across repos, so a trap recorded
-on one project warns the next). This is the "agents learn from past
-trajectories" idea, scoped to this pipeline's discipline instead of a generic
-log:
+If the setup provides a trajectory-memory store (an MCP/plugin recording
+per-surface work history - ideally global, repo-tagged, and append-only, so a
+trap recorded on one project warns the next), wire it into two touchpoints:
 
-- **Read at the start (step 2, with graphify):** `query_trajectory({ surface,
-  text })`. graphify tells you what renders the surface; trajectory-kb tells you
-  what was already tried on it and what failed. A past `what_failed` is the G4
-  wrong-surface / G0 wrong-axis miss pre-recorded - the cheapest possible way to
-  not repeat it.
+- **Read at the start (step 2, with graphify):** query the surface before
+  building. graphify tells you what renders the surface; the trajectory memory
+  tells you what was already tried on it and what failed. A past recorded
+  failure is the wrong-surface / wrong-axis miss pre-recorded - the cheapest
+  possible way to not repeat it.
 - **Write at every loop EXIT (step 10), not just a clean close - after the
   by-value verify when there is one; the only exit that skips it is a loop
-  genuinely paused mid-flight (not yet exited):** `append_trajectory({ repo,
-  surface, surface_key, symptom, root_cause, outcome, what_worked, what_failed,
-  files, regressed, tier })`. The `outcome`
-  enum is deliberately the G0 ship ladder - `fixed` / `unverified-reasoned` /
-  `speculative` / `reverted` - so the store doubles as a queryable history of
-  which fixes shipped verified vs downgraded vs blocked, per surface. **Record
-  the FAILURES, not just the wins:** a downgraded, reverted, or blocked exit
-  (you could not verify and handed the ticket back) is the entry most worth
-  keeping - it is what stops the next loop repeating the wall. A success-only
-  store is survivorship bias (a recent sample read 100% `fixed`, so it could not
-  surface any recurring pain). Record the root cause and, crucially, the dead
-  ends in `what_failed`. Pass `surface_key` (the canonical primary file /
-  component id) so the same surface GROUPS across loops - free-text `surface` is
-  almost never written identically twice, so without the key recurrence is
-  invisible (the server auto-derives one, but explicit is more reliable). Also
-  pass `files` (the edited files) and, if the fix broke a twin surface (a G6
-  miss), `regressed` (that surface) - these feed `fanout`'s history-aware
-  tiering and its `regression-history` coupling signal, so a surface with a bad
-  track record auto-bumps to the top tier the next time it is planned.
+  genuinely paused mid-flight (not yet exited):** append the surface, the
+  symptom, the root cause, what worked, what failed, and the outcome exactly
+  as shipped (verified / downgraded / reverted / blocked), so the store
+  doubles as a queryable history of which fixes shipped verified vs downgraded
+  vs blocked, per surface. **Record the FAILURES, not just the wins:** a
+  downgraded, reverted, or blocked exit (you could not verify and handed the
+  ticket back) is the entry most worth keeping - it is what stops the next
+  loop repeating the wall; a success-only store is survivorship bias. Include
+  a canonical surface key (the primary file / component id) so the same
+  surface GROUPS across loops - free-text surface names are almost never
+  written identically twice - plus the edited files and any twin surface the
+  fix regressed: these feed `fanout`'s history-aware tiering and its
+  `regression-history` coupling signal, so a surface with a bad track record
+  auto-bumps to the top tier the next time it is planned.
 
-It does NOT replace the step-12 ratchet (durable MECHANICS still go into the
-project skill) or auto-memory (session state). Trajectory-kb is the per-incident
-"what we tried on this surface and how it turned out" layer - the thing that was
-previously locked in a closed ticket nobody re-reads.
+The store's exact tool names, fields, and outcome taxonomy come from the
+plugin/config layer that provides it. It does NOT replace the step-12 ratchet
+(durable MECHANICS still go into the project skill) or auto-memory (session
+state) - it is the per-incident "what we tried on this surface and how it
+turned out" layer, the thing previously locked in a closed ticket nobody
+re-reads.
 
 ## Failure modes (red flags - STOP)
 
 | Rationalization | Reality |
 |---|---|
-| "Tests pass, it's fixed" | jsdom != production render. Verify by value on the deploy (G1). |
-| "My change is deployed, so it's fixed" | Deployed != the reported symptom is gone. Re-check the reproduced symptom (G0), not just that your change shipped. |
-| "Can't reproduce it, but the code clearly shows the cause" | Reasoning != observation. Get a tool/info that CAN observe it, or downgrade the claim - never assert "fixed" against a symptom you never saw (G0). |
-| "I found the component by grep" | Grep finds A component, not THE surface. Drive the reporter's screen (G2/G4). |
-| "Can't open the surface, but the code clearly shows how it works" | Code-inference under blocked observation is a HYPOTHESIS, not a fact. Hedge it, cross-check the authoritative enum/type/contract (not one grep), and let a refuting gate (tsc/test) re-open the diagnosis (G0-D). |
-| "Automation can't reach it, so ship unverified-reasoned" | Drive the user's LIVE session via Claude-in-Chrome first, then Playwright/DevTools/preview. A surface behind a visible button is observable - exhaust the tools before any can't-observe downgrade (G0-C precondition). |
-| "The deploy is probably done" | Confirm the sha (G3). ~70s feels like forever; verify anyway. |
+| "Tests pass, it's fixed" | jsdom != production render. Verify by value on the deploy. |
+| "My change is deployed, so it's fixed" | Deployed != the reported symptom is gone. Re-check the reproduced symptom, not just that your change shipped. |
+| "Can't reproduce it, but the code clearly shows the cause" | Reasoning != observation. Get a tool/info that CAN observe it, or downgrade the claim - never assert "fixed" against a symptom you never saw. |
+| "I found the component by grep" | Grep finds A component, not THE surface. Drive the reporter's screen. |
+| "Can't open the surface, but the code clearly shows how it works" | Code-inference under blocked observation is a HYPOTHESIS, not a fact. Hedge it, cross-check the authoritative enum/type/contract (not one grep), and let a refuting gate (tsc/test) re-open the diagnosis. |
+| "Automation can't reach it, so ship unverified-reasoned" | Drive the user's LIVE session via Claude-in-Chrome first, then Playwright/DevTools/preview. A surface behind a visible button is observable - exhaust the tools before any can't-observe downgrade. |
+| "The deploy is probably done" | Confirm the sha. ~70s feels like forever; verify anyway. |
 | "This needs the reporter's screenshot" | If a prototype/design source is on disk, extract the spec yourself first. |
 | "I'll reply on the ticket page" | Reply in the reporter's THREAD or they won't see it in context. |
 | "Auth wall - I'll log in" | Never enter credentials/OTP. Pause and ask the user to re-auth. |
-| "My step works; the rest of the flow is unchanged" | The seam you changed feeds the terminal action. Drive it (G5). |
-| "Fixed the exact card the reporter pointed at" | Its twin in the sibling flow still has the old pattern - the next ticket (G6). |
+| "My step works; the rest of the flow is unchanged" | The seam you changed feeds the terminal action. Drive it. |
+| "Fixed the exact card the reporter pointed at" | Its twin in the sibling flow still has the old pattern - the next ticket. |
 | "I'll just push direct, the bypass notice is normal" | A required check that never blocks is a single point of failure. Open a PR; merge on green (author-preserving). |
-| "Starting fresh on this surface" | Maybe not - `query_trajectory({surface})` first; a past `what_failed` is the wrong-surface trap already paid for once (trajectory memory). |
+| "Starting fresh on this surface" | Maybe not - check the trajectory memory (if wired) first; a past recorded failure is the wrong-surface trap already paid for once. |
 | "I'll finish this ticket first, then look at the new ask" | Re-batch (step 0): the new item joins the work-set NOW; your CI/deploy waits are exactly when its build should run. Queueing it is the serial trap. |
 | "The board has other Open tickets, but I was only asked about this one" | Board-shaped ask -> the full Open column IS the work-set (step 0). One-at-a-time drains a board at ~1 spine per ticket. |
 | "One big cluster - it all serializes" | Read `waves`: a real 92-item work-set runs 25-wide in wave 1. Only clique tails (N items editing ONE file) are one-at-a-time. |
 | "CI is running, I'll wait for it" | Polling is background work. Foreground = the next MSP's build/review (Pipeline the SPINE). |
-| "It's additive - nothing to reproduce, so G0 doesn't apply" | G0's second form: capture the surface WITHOUT the change (the before-state) + pre-register the NEW observable. No acceptance line -> not allowed to build. |
+| "It's additive - nothing to reproduce, so the pin doesn't apply" | The pin's second form: capture the surface WITHOUT the change (the before-state) + pre-register the NEW observable. No acceptance line -> not allowed to build. |
 | "No deploy on this project, so steps 8-9 don't apply" | The verification target is the built artifact at the merged sha (fresh install, run it, assert output by value). A CLI/library is never exempt. |
 | "It's basically trivial" (it touches logic) | The lite lane is copy/docs/token-sized only, and it KEEPS PR+CI+the by-value check. Lane creep is how bypass starts (Proportionality). |
 | "These two are in different repos, so they're parallel" | Repo-disjoint is not dependency-independent. Declare the `after` edge (BE producer -> FE consumers) and let waves order them. |
 
 ## Related skills
-- `parity-sweep` - value-assertion methodology (G1 in depth) + scoped mode.
-- `parity-builder` - prototype/design-source ports: it owns those MSPs; they
-  still join this loop's plan and spine (step 0 typing rule).
+- `parity-receipt` - value-assertion methodology in depth + scoped mode.
+- `proto-port` - prototype/design-source ports (translate-first): it owns
+  those MSPs; they still join this loop's plan and spine (step 0 typing rule).
 - `superpowers:brainstorming` / `superpowers:writing-plans` - design-shaped
   items route there first; their output re-enters the work-set as specified
   items / an MSP-sliced plan (step 0 typing rule).
 - `fanout` - clusters/waves/tiers + `after` dependency ordering; the MSPs
   section above maps its output to PRs.
-- `trajectory-kb` (MCP) - cross-loop memory: query past trajectories at step 2, append the shipped outcome at close-out.
+- The environment's verification-gates + trajectory-memory layer (a
+  bootstrapped plugin/config, when present) - canonical for gate definitions,
+  close-out statuses, referees, and cross-loop history.
 - `pre-commit` - project-real gates. `git-commit` - identity-aware commits.
 - `superpowers:systematic-debugging`, `superpowers:verification-before-completion`.
 - The project-level skill supplies all concrete facts (boards, repos, URLs).

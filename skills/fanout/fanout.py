@@ -5,9 +5,11 @@ serialize (one owner); distinct clusters are file- and contract-disjoint -> safe
 to run in parallel (merge-safety unit is the EDITED file, not symbols, not
 transitive import-coupling).
 coupling_review: for each file-disjoint, NOT-co-clustered PAIR, the soft coupling
-signals (import-adjacency, shared risk-marker, and - from trajectory memory - a
-recorded regression between the two surfaces) that warrant an explicit
-parallelize-vs-serialize verdict from the ORCHESTRATOR before dispatch.
+signals (import-adjacency, shared risk-marker, a recorded regression between the
+two surfaces from trajectory memory, and same-migration-app - both add a migration
+to one app's sequentially-numbered migrations/ dir, so parallel builds collide on
+the number) that warrant an explicit parallelize-vs-serialize verdict from the
+ORCHESTRATOR before dispatch.
 tier_for: RISK tier ('top'/'cheap') from caller-supplied path markers; a surface
 with a bad track record in trajectory memory (a revert, a speculative ship, a
 caused-regression, or repeated wrong-surface traps) is ALSO forced to 'top',
@@ -55,7 +57,7 @@ def build_file_coupling(nodes_by_id, links):
 def _paths_match(a, b):
     """Same file across repo-relative vs prefixed roots: equal, or one is a
     /-boundary suffix of the other (so item 'backend/app/services/x.py' matches
-    graph node 'app/services/x.py' but 'xapp/s.py' does NOT match 'app/s.py').
+    graph node 'app/services/x.py' but 'yapp/s.py' does NOT match 'app/s.py').
     Without this, item paths that carry a repo prefix never resolve to graph
     nodes and the coupling advisory silently never fires."""
     return a == b or a.endswith("/" + b) or b.endswith("/" + a)
@@ -291,6 +293,22 @@ def history_tier_bump(item, trajectories):
 
 # ── coupling + tier ─────────────────────────────────────────────────────────
 
+def _migration_apps(file_paths):
+    """App dirs whose migrations/ a set of files touches. Two file-DISJOINT items
+    that each ADD a migration to the SAME app collide at the same migration number
+    when built in parallel (two 0089_* leaves -> the renumber-on-rebase tax) - a
+    serialize signal that file-overlap clustering MISSES, because the new migration
+    files have different names and so never register as a shared file. Frameworks
+    with a per-app sequentially-numbered migration dir (Django, Rails db/migrate,
+    etc.) all share this hazard; the key is the path segment before `migrations/`."""
+    apps = set()
+    for f in file_paths:
+        norm = f.replace("\\", "/")
+        if "migrations/" in norm and norm.endswith(".py"):
+            apps.add(norm.split("migrations/")[0].rstrip("/"))  # '' == repo-root migrations dir
+    return apps
+
+
 def coupling_review(items, adj, risk_markers, trajectories=None):
     """For each file-disjoint, NOT-co-clustered pair, surface soft coupling
     signals that warrant an explicit parallelize-vs-serialize verdict before
@@ -299,9 +317,13 @@ def coupling_review(items, adj, risk_markers, trajectories=None):
       - shared-risk-marker:<M>: the SAME risk-marker matches a file in both
       - regression-history:     trajectory memory records a fix on one surface
                                 having broken the other (default 'serialize')
-    default 'serialize' when they share a risk-marker or have a recorded
-    regression (likely halves of one contract / known to break each other); else
-    'parallel'. Signal-free pairs are omitted (auto-parallel)."""
+      - same-migration-app:<A>: both add a migration to the same app's migrations/
+                                dir -> parallel builds collide on the migration
+                                number (default 'serialize')
+    default 'serialize' when they share a risk-marker, have a recorded regression,
+    or would collide on a migration number (likely halves of one contract / known
+    to break each other / a guaranteed rebase conflict); else 'parallel'.
+    Signal-free pairs are omitted (auto-parallel)."""
     names = [it["name"] for it in items]
     by_name = {it["name"]: it for it in items}
     files = {it["name"]: set(it["files"]) for it in items}
@@ -330,9 +352,11 @@ def coupling_review(items, adj, risk_markers, trajectories=None):
                           or any(_entry_regresses_item(e, by_name[a]) for e in matched[b]))
             if regression:
                 signals.append("regression-history")
+            mig = sorted(_migration_apps(files[a]) & _migration_apps(files[b]))
+            signals += ["same-migration-app:" + (m or "<root>") for m in mig]
             if signals:
                 out.append({"pair": [a, b], "signals": signals,
-                            "default": "serialize" if (shared or regression) else "parallel"})
+                            "default": "serialize" if (shared or regression or mig) else "parallel"})
     return out
 
 

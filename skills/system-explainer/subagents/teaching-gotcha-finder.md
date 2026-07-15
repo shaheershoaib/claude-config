@@ -1,6 +1,6 @@
 ---
 name: teaching-gotcha-finder
-description: Scan a domain's code for non-obvious behaviors, edge cases, design ambiguities, and SME-worthy questions that a teaching session may have missed. Used by the system-explainer skill at Phase 2 Step 7 (end of domain) to produce rigorous gotcha entries without depending on the teacher to remember to flag everything. Findings are returned to the teacher, who appends them to gotchas.md via the teaching-knowledge-base MCP's append_gotcha tool.
+description: Scan a domain's spine (code, or a live tool's surfaces via its channel) for non-obvious behaviors, edge cases, design ambiguities, unexplained component boundaries, spec-vs-built divergences, and SME-worthy questions that a teaching session may have missed. Used by the system-explainer skill at Phase 2 Step 7 (end of domain) to produce rigorous gotcha entries without depending on the teacher to remember to flag everything. Findings are returned to the teacher, who appends them to gotchas.md via the teaching-knowledge-base MCP's append_gotcha tool.
 tools: Read, Glob, Grep
 model: inherit
 ---
@@ -15,7 +15,7 @@ Your findings get appended to `gotchas.md` for the system being taught. The user
 
 The teaching agent will dispatch you with:
 - The **domain** that was just taught (e.g., "Audit Balance," "Carrier Remit")
-- The **paths / files** for that domain's code
+- The **paths / files** for that domain's code — or, for a live-tool spine, the **surfaces** to observe (this prompt then runs with browser/MCP tools, or the teacher follows it inline; all rules unchanged)
 - Optional: a list of things the teacher already covered, so you know what *not* to re-surface
 - A pointer to the **context index** at `~/.claude/skills/system-explainer/references/<system>/context-index.md` if one exists
 
@@ -42,9 +42,13 @@ Use these categories, in roughly decreasing value:
 
 3. **Design ambiguities or apparent inconsistencies** — places where two parts of the code seem to disagree, or where the data model says one thing but the workflow assumes another. Example: "The Policy model permits multi-state class codes via the `ST` field on each line, but the UI assumes single-state per policy throughout."
 
-4. **Looks-like-bug-but-might-be-intentional** — places where behavior looks wrong but could be deliberate. Flag these as questions, not assertions. Example: "The system always generates a customer-facing variance invoice for an under-payment, even when the discrepancy is the operator's own error — is this intentional or a gap?"
+4. **Looks-like-bug-but-might-be-intentional** — places where behavior looks wrong but could be deliberate. Flag these as questions, not assertions. Example: "The exception flow always generates a customer-facing variance invoice for under-remit, even when the variance is the company's own error — is this intentional or a gap?"
 
 5. **SME-worthy questions** — questions about business logic that the code can't answer because they're upstream of code (rule definitions, carrier-specific policies, regulatory requirements). Example: "Per-vendor acceptance rules aren't in the codebase — they appear to live in user knowledge. Should they be captured as data?"
+
+6. **Unexplained boundaries** — a separately-named component (workflow, service, module, job) whose reason for being separate from its neighbor is not discoverable from the sources. Example: "Two extraction workflows exist side by side; nothing in either explains why the second can't be a branch of the first. Bespoke per-source logic? Different owner? Ask." An unanswerable "why is this its own thing?" is a design question the learner will hit, so surface it first.
+
+7. **Spec-vs-built divergences** — places where the running system observably differs from what the PRD/spec/design doc says (a field the spec promises that doesn't exist, a threshold with a different value, a flow the spec describes that the build short-circuits). Example: "The spec defines a similarity band for dedup review; the built pilot auto-merges on exact URL match — no band exists." Each divergence is a gotcha by definition: either the spec is stale or the build is incomplete, and someone needs to say which.
 
 ## What does NOT count as a gotcha
 

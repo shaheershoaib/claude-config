@@ -21,18 +21,18 @@ description: >-
 # <Project> loop (project facts)
 
 **Process:** invoke the global `ship` skill - it carries the
-loop skeleton and guardrails G0-G6 (step 0 enumerates the work-set; G0 pins
-the before-state). This file supplies the facts it needs. If anything here
-disagrees with auto-memory, memory wins.
+loop skeleton and verification guardrails (step 0 enumerates the work-set;
+the before-state pin comes before any build). This file supplies the facts it
+needs. If anything here disagrees with auto-memory, memory wins.
 
 ## Repos + branches
 - **<repo-name>** - <stack>: `<absolute path>`, integration branch
   `<branch>`, deploys to <platform>.
 - **Prototype / design source of truth** (if one exists): `<absolute path>`
-  - parity-builder builds from it (the prototype IS the spec), parity-sweep
-  verifies against it, and specs are extracted from it instead of asking
-  reporters for screenshots. Proto-cache lands in
-  `<repo>/parity/proto-cache/`.
+  - proto-port translates from it (the proto CODE is the build input),
+  parity-receipt verifies against it, and specs are extracted from it
+  instead of asking reporters for screenshots. Receipts land in
+  `<repo>/parity/<surface>.yaml`.
 - Worktrees: `<repo>-worktrees/<branch>`; symlink untracked deps the build
   needs (<node_modules / .env.local / .venv / .env>).
 
@@ -67,14 +67,14 @@ disagrees with auto-memory, memory wins.
   line). Absent = the global loop's verification bar is norms-only here; the
   bar binds regardless.>
 
-## Terminal actions + state-construction recipes (G5)
+## Terminal actions + state-construction recipes
 - <For each multi-step flow: its terminal action (Activate/submit/save) and
   the cheap way to reach it - ideally an API recipe that constructs the
   needed state (create a draft/record, resume it, assert persisted state by
-  value, clean up). This is what makes the G5 check ~2 minutes instead of
-  hand-driving the whole flow.>
+  value, clean up). This is what makes the terminal-action check ~2 minutes
+  instead of hand-driving the whole flow.>
 
-## Twin surfaces (G6 sweep list)
+## Twin surfaces (the twin-sweep list)
 - <Pairs/sets of parallel implementations of the same affordance: sibling
   wizards, duplicate preview cards, repeated contact rows, re-implemented
   input masks. When a fix changes a pattern on one, check/update its twins
@@ -94,8 +94,8 @@ disagrees with auto-memory, memory wins.
 - <Where to run queries from; what is excluded; when to refresh.>
 
 ## Related
-- Global: `ship`, `parity-sweep`,
-  `parity-builder` (building/porting surfaces from the prototype),
+- Global: `ship`, `parity-receipt`,
+  `proto-port` (translating/porting surfaces from the prototype),
   `pre-commit`, `git-commit`.
 - Project: <project audit skill, status-update skill, etc.>
 ```
