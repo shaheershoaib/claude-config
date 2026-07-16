@@ -13,7 +13,9 @@
     "test:watch": "vitest",
     "generate": "tsx generator/cli.ts",
     "assemble": "tsx generator/assemble-bundle.ts",
-    "server": "tsx server/index.ts"
+    "server": "tsx server/index.ts",
+    "reverify": "tsx generator/reverify.ts",
+    "export": "vite build"
   },
   "dependencies": {
     "@prisma/client": "^7.8.0",

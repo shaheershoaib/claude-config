@@ -96,7 +96,10 @@ judgment never leave the orchestrator.
    evidence carries a proto_shot + app_shot pair, judge DESIGN-INTENT
    equivalence - layout, hierarchy, spacing rhythm, emphasis, and color
    ROLES (is the primary action visually primary; is a colored action
-   still colored) - never pixel equality: the two stacks legitimately
+   still colored) - through the declared `visual_basis` when `port_config`
+   sets one (verbatim look = judge close to the proto; app-design-system
+   re-skin = roles map through the app's system, so a different hue with
+   the same role holds) - never pixel equality: the two stacks legitimately
    differ in fonts, widths, and rendering, and pixel-diffing them is
    noise. A leaf that keeps its data and behavior but loses its look is
    `DIVERGENT` with `facet: visual` (the 2026-06-29 button-color revert is
@@ -143,6 +146,12 @@ One file per surface, `parity/<surface>.yaml`, one entry per leaf:
 proto, absent in app) | `EXTRA` (app exceeds proto - note, not a defect) |
 `CONFLICT` (user decides) | `BACKEND-GATED` (UI present, data/endpoint
 absent) | `SCOPED-OUT` | `seed-gap` (unexercisable).
+
+A port run records its step-0 intake as a `port_config` block at the
+artifact head (target stacks, repo topology, scope, overlap ownership,
+proto authority, `visual_basis`, auth basis, seed source) - the receipt is
+judged on that declared basis, and a receipt whose basis was never declared
+says so.
 
 **Gate:** a surface is receipted only when 100% of its leaves carry a
 verdict, every interactive leaf has by-value browser evidence, every

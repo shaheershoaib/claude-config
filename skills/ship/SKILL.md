@@ -11,8 +11,9 @@ description: >-
   "work the board", or any "make these changes and ship them" request.
   Project facts (repos, branches, verification target, optional ticket board,
   commit identities) come from the project's own skill/CLAUDE.md/memory - this
-  skill is the project-agnostic skeleton plus the guardrails that prevent
-  false "fixed" claims.
+  skill is the project-agnostic skeleton, and it runs under the environment's
+  verification-gates layer (canonical for gate definitions and the close-out
+  evidence bar), which it invokes at loop entry.
 ---
 
 # Ship (the work-set loop)
@@ -20,8 +21,10 @@ description: >-
 The standard pipeline for turning a WORK-SET - however it arrives: a list of
 asks in chat, tracker tickets, a reporter's follow-up comment, a plan/handoff
 document on disk - into shipped, verified, closed changes. The mechanical steps
-are easy; the guardrails are the point. Every one of them exists because
-skipping it has shipped a wrong or unverified "fix" at least once.
+are easy; the discipline is the point. The VERIFICATION discipline (the gates)
+belongs to the environment's verification layer - this loop invokes it at entry
+and runs every item under it (see "The gates" below); what this file carries is
+the loop's own scheduling discipline, each rule paid for by a real miss.
 
 **Boundary: `fanout` writes the schedule; ship runs the job.** The planner is a
 deterministic tool this loop CALLS at step 0 (clusters/waves/tiers in seconds);
@@ -62,263 +65,57 @@ the terminal-action and twin-surface hooks.
 
 ---
 
-## The guardrails (more important than the steps)
+## The gates (the verification layer is canonical - honor ALL of it)
 
-**Gate definitions live in the environment's verification-gates layer, not
-here.** When a verification plugin/config is bootstrapped into the setup (a
-gates skill, close-out hooks/referee, a receipt + status taxonomy), that layer
-is CANONICAL for what each gate requires and for the evidence a close-out must
-carry - this loop assumes it is active, does not restate its spec, and defers
-to it wherever the two overlap. What follows is only the operational
-discipline the LOOP itself needs to run its steps.
+Gate definitions, the receipt + close-out evidence bar, the downgrade statuses,
+the referees/tripwires, and the per-medium "what counts as the value" mapping
+are NOT this skill's to define. They live in the environment's bootstrapped
+verification layer (a gates skill + close-out hooks + a per-project config + a
+trajectory store), and that layer is canonical wherever the two could overlap.
+This loop deliberately does NOT restate its spec: a partial restatement here
+would SHADOW the full set - an agent reading six gates concludes those are the
+gates, and the ones the prose never names silently stop being honored.
 
-### Pin the BEFORE-state FIRST; the acceptance observable IS your test
-Before touching code, OBSERVE the target surface as it is and capture what you
-saw - that observation is the exact thing your by-value check (step 9) must
-later show CHANGED. "My change is deployed/live" is NOT verification: your change
-being live is not the same as the acceptance observable being true. (Proof: a
-"modal cut off" report was read as a vertical footer-clip; a height cap was
-built, gated, deployed, and "verified by value" that the cap was applied - all
-green - while the real bug was the modal being too NARROW. The wrong axis
-shipped; only the reporter caught it.)
+Make the deferral ACTIVE, not assumed:
+- **At loop entry, INVOKE the environment's gates skill** (via the Skill tool)
+  so the FULL gate set is in context - not a remembered subset. The layer
+  covers more than the obvious verify checks (reproduce / assert-the-value /
+  right-build / right-surface / terminal-action / twins): dependents,
+  fresh-base, rollout compatibility, referee integrity, and diff congruence
+  live there too.
+- **Steps 8-10 EXECUTE that layer's spec** - the machine-checkable evidence on
+  the deployed target, the close-out statuses, the referee's floor. They never
+  redefine it.
+- **A gate you cannot clear exits through the layer's honesty ladder** - an
+  honest downgraded status, never a silent "fixed", never relabeling one
+  downgrade as a milder one, and never out-arguing a referee that fires: do
+  the verify or take the honest downgrade.
+- **No verification layer in this environment?** The bar binds by norms anyway -
+  hold it harder, not softer (no referee is exactly when quiet skips creep
+  back) - and flag the missing layer to the user as setup debt.
 
-The pin has TWO forms - pick by the work-item's shape:
-- **REGRESSION / FIX (something is wrong):** reproduce the symptom. The observed
-  failure IS the acceptance test; step 9 must show it GONE.
-- **ADDITIVE / CHANGE (something new or different is wanted):** observe the
-  surface WITHOUT the change (the before-state - same discipline, usually two
-  minutes) and pre-register the NEW observable as the acceptance line
-  ("Acceptance: a CSV Export button on /customers downloads the filtered
-  rows"). "Nothing to reproduce" never means "nothing to pin": the before-state
-  capture is what makes the after-check a diff instead of a vibe. A mechanical
-  many-site sweep's before-state is the site CENSUS (grep/graph enumeration);
-  its acceptance is census-zero plus sampled drives.
-
-This gate is the OBSERVABLE side - pin it so step 9 can re-check it; finding WHY
-a bug happens (so the fix addresses the cause, not the symptom) is a SEPARATE
-discipline, `superpowers:systematic-debugging` at step 4, which REUSES this same
-reproduction. Shorthand: the pin makes you verify the right thing;
-systematic-debugging makes you fix the right thing - they share only the
-reproduce step, not the job.
-
-The escape hatches below REPLACE a hard rule with judgment, so each is defaulted-
-STRICT and STRUCTURED (the skeptical-default shape you use in coupling_review) -
-never a free-text afterthought, which is a loophole, not a gate. The litmus: could
-someone reading the ticket in six weeks tell, without ambiguity, exactly what WAS and
-was NOT verified and why, with a tracked path to close any gap? If not, you have not
-implemented the gate.
-
-**(A) Ambiguous ask** ("cut off", "broken", "weird", "thin", "slow", "doesn't
-work", "improve X", "make it feel better") - pin the exact observable BEFORE
-building: reproduce it, or ask ONE clarifying question. Never infer which
-symptom they mean. If the ask stays SUBJECTIVE after that one question, it is
-DESIGN work, not a fix: route it to `superpowers:brainstorming` with the
-observations you gathered, and its output re-enters the work-set as specified
-items (step 0's typing rule). Never enter the build path with an unpinnable
-acceptance line.
-
-**(B) Repro-gate: default = REPRODUCE; skipping is the recorded exception.**
-- Skipping requires a one-line reason a reviewer can challenge - not a silent call.
-- "Obvious enough to skip" = obvious CAUSE + an unambiguous, graphify-confirmed fix
-  LOCATION, NOT an obvious-looking symptom. The classic wrong-fix is "looked obvious,
-  patched the obvious thing, missed that the real cause was a different surface" (the
-  wrong-surface miss graphify exists to catch).
-- Reporter/tester-sourced symptom -> repro is MANDATORY, never skipped (same rigor as
-  read-the-full-thread / pin-the-exact-flow).
-- Skipping end-to-end repro is NOT skipping evidence: a cheap regression/unit test
-  that exercises the fixed code path is the substitute.
-
-**(C) Can't reproduce - separate the two flavors; never blur them:**
-- PRECONDITION before ANY downgrade - "can't observe" means you EXHAUSTED the available
-  automation, NOT that your first method failed. Try the browser MCP against the user's
-  LIVE authenticated session first (Claude-in-Chrome on their open tab), then Playwright /
-  Chrome DevTools / the preview tools. A surface reachable by clicking a VISIBLE button
-  (e.g. "Add Account" -> a 6-step wizard) is OBSERVABLE; shipping it `unverified-reasoned`
-  because a grep or a viewport-resize didn't pan out is the escape hatch used as a first
-  resort. Real miss: claimed a wizard "can't be driven", shipped unverified - it opened in
-  ~6 clicks from the customer page in the user's own browser, and driving it showed the
-  fix was correct AND surfaced a requirement-polarity question the static read had hidden.
-- Can't OBSERVE (env limit, e.g. a viewport you can't shrink) BUT you have a REAL root
-  cause + a test exercising the fixed path -> ship ONLY as a STRUCTURED DOWNGRADE,
-  never a clean "fixed": a distinct status `unverified-reasoned`, a required reason,
-  ROUTED to whoever can observe it (in the reporter's thread: "shipped; not
-  reproducible in my env, please confirm on retest") + a tracked "verify-when-
-  observable" item with a real DISPOSITION: either it lands in a NAMED, QUERYABLE
-  destination (a board status / label / field, a saved view, the tester's retest
-  queue), OR you surface it explicitly to a human in-session who decides how - or
-  whether - to track it. The closed loop is the DECISION, not the medium: an in-chat
-  flag counts ONLY if it forces that disposition and you do NOT treat the fix as done
-  until the decision is made. A dropped FYI is not tracking - a chat line or a buried
-  PR sentence that nobody acts on lets unverified fixes pile up SILENTLY, the exact
-  debt this gate exists to surface.
-- Can't observe AND no identified cause = guessing -> do NOT ship-as-fixed. Get more
-  info from the reporter (repro steps / screenshot), or - only if truly forced - ship
-  under a louder, DISTINCT `speculative - no root cause` flag - and HARD-GATE that path, because it is the
-  closest thing to a legitimate "ship anyway" and so earns the TIGHTEST leash: NEVER
-  silent; on money/auth/contract/migration NEVER without explicit HUMAN sign-off (the
-  agent may NOT self-approve it - block and ask); and auto-listed in the SAME named
-  destination for follow-up. It is a scarier thing than `unverified-reasoned`; never
-  relabel one as the other.
-- RISK-GATE the downgrade itself: on high-blast-radius surfaces (money/ledger, auth,
-  service/API contract, destructive migration) "can't repro" stays close to a BLOCK or
-  demands stronger compensating evidence (more tests, a second reviewer, a
-  seeded/staged repro). The easy downgrade is for low-blast-radius ONLY.
-
-**(D) Observation blocked at DIAGNOSIS time -> a code-inference is a HYPOTHESIS,
-not a stated fact.** When you cannot drive the live surface, do NOT promote "the
-code seems to show X" into "X is true." Two misses in one sitting on one ticket: a
-narrow grep -> "this flow has no prospect concept" (false - the user could see the
-selector); then "prospect = account_status" (false - tsc proved no such enum value;
-the real field was `classification`). Both were inferences ASSERTED as fact about a
-surface I could not watch. This is the diagnosis-phase twin of (C) (which governs the
-SHIP claim); here the PREMISE is what's unverified. Guard:
-- State the inference AS an inference ("from the schema it looks like X; I could not
-  drive the UI to confirm"); on anything load-bearing, cross-check it against the
-  AUTHORITATIVE definition (the enum / type / schema / contract), not one grep.
-- Treat a failing gate as a PREMISE-check, not a nuisance: a tsc "no overlap" or a
-  test that contradicts your assumption is REFUTING the diagnosis - stop and
-  re-ground, don't just edit until the compiler goes quiet.
-- If the premise still isn't confirmable from code, ASK the reporter/user (they can
-  observe) before building on it. A cheap question beats a confident wrong build.
-- **For a render-shaped symptom (wrong value / wrong label / missing or duplicated
-  row), the AUTHORITATIVE source at diagnosis is the LIVE RENDERED build, not the
-  enum/type/schema.** The contract can be correct while the bug lives in the render
-  path (a mislabel, a branch-ordering short-circuit, a display-mapping collision),
-  so reading the code/contract alone "confirms" the wrong conclusion. Drive the
-  current deployed surface per (C)'s authed-session precondition and read the actual
-  rendered value BEFORE writing the fix. Proof: a missing "Remittable fees" row was
-  diagnosed from the schema as a pure data gap (fix = seed the data, no code change);
-  the live build showed the data WAS present but the row rendered under the wrong
-  label - an ordering bug in the display-label mapping - so the first fix was a no-op
-  and the real fix needed a second PR + deploy cycle. Green CI + passing unit tests
-  did not catch it (the fixtures used a label that dodged the ordering bug); one live
-  read at diagnosis would have.
-- **For a PROGRESSION / interaction symptom (won't advance, "stuck on a step",
-  "can't proceed", nothing happens, a button errors on re-click) the authoritative
-  source is DRIVING THE LIVE FLOW TO THE FAILING ACTION - and a DB query is NOT a
-  substitute.** This is the render bullet's twin for behavior: the backend can be
-  fully CORRECT while the FE fails to reflect it, so reading the DB row (a status,
-  a step counter, an FK) "confirms" a phantom data/seed bug and hides the real FE
-  one. "Verify by value" here means the value the REPORTER perceives - did the step
-  advance, did the terminal action succeed - NOT a column value; the DB is only the
-  backend half. Drive the reporter's exact click on the deployed build BEFORE
-  writing the fix. Proof (2026-06-24): a Refund/Reissue "stuck on Step 3" blocker
-  was diagnosed from the DB (workflows at current_step=3 with a replacement linked)
-  as "inconsistent seed data" and a backend SEED fix was built + gated green;
-  driving the live flow showed the backend Generate SUCCEEDS and the FE never
-  advances past Step 3 (an FE off-by-one). The seed was the wrong surface and was
-  reverted - one live drive at diagnosis would have skipped the whole detour.
-- **A ticket's stated cause is a HYPOTHESIS, not the diagnosis - a ticket YOU
-  authored earlier from inference is the most dangerous, because re-reading it
-  launders your own guess into "fact".** Re-reproduce the symptom yourself per the
-  class rules above before building the fix the ticket's framing implies. (The
-  Step-3 detour above began from a ticket I had written from a DB inference, then
-  executed without re-observing - the inference never got re-tested against the
-  live surface it was about.)
-
-### Verify what shipped, where it shipped, all the way down
-The gates layer holds the full spec; what step 9 operationally requires:
-- **Assert the rendered VALUE, never presence or a placeholder** - read
-  `input.value` / the selected option / `checked` / the rendered number via
-  the DOM on the **deployed** build. Uncontrolled form defaults paint in
-  dev + jsdom and empty in production; "the test passes" and "the screenshot
-  looks right" are both insufficient. The `parity-receipt` skill is this
-  methodology in depth; use its scoped mode (Mode 1) for single-fix
-  verification.
-- **Verify on the build that contains YOUR commit** - confirm the deployed
-  artifact's sha matches your push before driving the UI (step 8's polling
-  procedure); a green check on the old build proves nothing.
-- **Fix and verify the exact surface/flow the REPORTER means** - apps grow
-  parallel implementations of the "same" feature (an onboarding wizard AND a
-  detail-page dialog; a summary card AND a drill-in page), and code search
-  finds *a* component, not THE screen. Reproduce the reporter's path before
-  touching code (when ambiguous, ask); after deploying, drive their actual
-  screen - if your change isn't visible there you fixed the wrong surface:
-  revert it rather than leave two competing copies.
-- **Drive the changed flow to its TERMINAL action** (Activate / submit /
-  save) on the deployed build, down the path a real user takes - including
-  ACCEPTING pre-filled defaults rather than re-typing them. The state seams
-  between steps (local form -> shared store -> final validator / submit
-  payload) are where fixed-one-broke-another lives: a step can validate its
-  own form, pass Next, and still fail the terminal action against the shared
-  store. When hand-driving the whole flow is slow or fragile, construct the
-  state through the app's own API and assert the persisted state by value.
-- **Sweep the changed pattern's PARALLEL twins before closing** - a pattern
-  change on one surface (icon placement, label, mask, color convention)
-  creates a reporter-visible inconsistency on every sibling still carrying
-  the old pattern, and that becomes the next ticket. Enumerate the parallel
-  instances (grep the component/icon/classname; if a graphify graph exists,
-  ask "what else renders this") and apply the same change or note the
-  divergence as a conscious deferral. Prefer SHARING the implementation
-  (extract the component) over copying the patch - twins that share code
-  cannot drift.
-
----
-
-## The verification gate (the one step that keeps getting skipped)
-
-The recurring, trust-destroying failure: claiming a ticket FIXED on the strength of
-a PROXY - green CI, a passing unit test, a deployed sha, a DB row, a confident code
-read - WITHOUT observing the reporter's symptom gone on the deployed build. The
-tester catches it and resubmits. This gate is the one step with no external referee
-(everything else has CI / the compiler / a hook), so it loses to the pull-to-finish.
-Environments may back it with an external referee - see "Enforcement" below -
-and the bar binds either way. Do not try to out-argue it.
-
-- **Pin-FIRST, and pre-register the acceptance test (step 2 does this).** Before
-  any code, drive the reporter's flow, OBSERVE the before-state (the symptom -
-  or, for an additive item, the surface without the change), and write the exact
-  observable-that-must-change into the ticket / work-set notes ("Acceptance:
-  clicking Generate advances to Step 4"). No acceptance line recorded -> not
-  allowed to build. This makes the end-check mechanical (re-run that exact
-  step), not "looks right", and makes the end-drive nearly free (you are already
-  on the surface).
-- **Never write the bare word "fixed." State the EVIDENCE.** A close-out (and any
-  "done" you say to the user) must carry: `before-state <X> -> on target sha
-  <Y> -> <the acceptance observable now true, by value>` (for a fix that reads:
-  reproduced symptom -> symptom GONE). If you cannot fill that line with a real
-  observation, you have not earned the claim - downgrade it (below).
-  "Deployed / CI-green / the test passes" never fills it.
-- **Strictness by acceptance class (the bar):**
-  - BEHAVIOR / UI / progression / render ("stuck", "won't advance", wrong value,
-    missing row, new control) -> a LIVE DRIVE on the DEPLOYED build to the
-    failing (or new) action. A DB query, a code read, CI, and a passing unit
-    test are CORROBORATION, never the verification - the backend can be correct
-    while the FE is broken (the diagnosis rules above).
-  - DATA / seed -> a by-value staging query (DB proxy / API) PLUS a sha-confirm
-    that the deployed build is the one you checked.
-  - ARTIFACT / API / CLI (a command's output, a library's return, a generated
-    file, an endpoint's response) -> RUN the real artifact built FROM the merged
-    sha (fresh install/build - never your worktree) and assert the output by
-    value (stdout / exit code / response field / file content). The captured
-    run output IS the artifact the screenshot would be for a UI close.
-- **The escape hatch is a LAST resort, never a first one.** Only a genuine
-  can't-observe - you EXHAUSTED the observation tools that fit the target
-  (authed-browser / preview / devtools for a web surface; running the artifact
-  itself for a CLI/library/API), and NEVER for a surface reachable by clicking a
-  visible button or running a shell command - may ship as a LOUD, distinct
-  `unverified-reasoned: <why unobservable + the unit test that covers the
-  path>`, routed to the reporter ("please confirm on retest"). Quiet skips, and
-  "my first method did not pan out", are the abuse this gate exists to stop.
-- **Enforcement (the bar is yours; the referee is the environment's):** this
-  bar is NORMATIVE - it binds with or without tooling. An environment MAY wire
-  an external close-out referee (a Stop hook / CI check that blocks a
-  fixed/verified claim lacking evidence); this skill neither requires nor names
-  one - the environment layer (e.g. a bootstrapped verification plugin and its
-  per-project config) declares the concrete referee, if any (see the
-  project-facts template's "Close-out referee" slot). What a
-  well-formed referee checks, and what you must show REGARDLESS: after the last
-  merge, BOTH (1) a BINDING to the verification target (a navigate to the app
-  host / a deployment read / a staging query / a fresh artifact run at the
-  merged sha) AND (2) an OBSERVATION (a screenshot, a by-value DOM read, a
-  by-value query, or captured run output). **A bare navigate or a lone
-  deployment read is a touch, not an observation:** arriving at the build
-  proves you got there, not that the acceptance observable is true. Where a
-  referee exists it is a FLOOR, not the bar; where none exists (or its
-  detection cannot see your close-out medium) the gate is refereed by NORMS
-  ONLY - which is exactly when quiet skips creep back, so hold it harder, not
-  softer. If a referee fires, do the verify or the honest downgrade - do not
-  relabel an unverified fix to dodge it.
+What the LOOP itself owns is scheduling, not spec - three disciplines its steps
+depend on:
+- **Pin the before-state and PRE-REGISTER the acceptance line at step 2**,
+  before any code: observe the reporter's surface as-is (reproduce the
+  symptom; for additive work capture the surface WITHOUT the change; a
+  mechanical sweep's before-state is its site census) and write the exact
+  observable-that-must-change into the work-set notes ("Acceptance: clicking
+  Generate advances to Step 4"). No acceptance line -> not allowed to build.
+  Step 9 re-runs that exact line - this is what makes the end-check mechanical
+  instead of "looks right".
+- **An ask that stays SUBJECTIVE after one clarifying question is DESIGN, not
+  a fix** ("improve X", "make it feel better"): route it to
+  `superpowers:brainstorming` with the observations you gathered (step 0's
+  typing rule). Never enter the build path with an unpinnable acceptance line.
+- **A code-inference about a surface you could not observe is a HYPOTHESIS.**
+  At diagnosis time state it as one, cross-check the authoritative definition
+  (the enum/type/schema/contract - or, for a render or progression symptom,
+  the LIVE build itself: drive the reporter's exact click before writing the
+  fix), and treat a refuting gate (tsc, a failing test) as re-opening the
+  diagnosis, not a nuisance. A ticket's stated cause - especially one YOU
+  authored earlier from inference - is also a hypothesis to re-test, never a
+  fact.
 
 ---
 
@@ -400,8 +197,8 @@ and the bar binds either way. Do not try to out-argue it.
    or capture the surface without the change), and **PRE-REGISTER the
    acceptance line** - write the exact observable-that-must-change into the
    ticket / work-set notes ("Acceptance: clicking Generate advances to Step
-   4"). No acceptance line recorded -> not allowed to build; the verification
-   gate reads this exact line back at step 9 (graph = hint, live app = truth).
+   4"). No acceptance line recorded -> not allowed to build; step 9 re-runs
+   this exact line (graph = hint, live app = truth).
 3. **Isolated worktree.** `git worktree add -b <branch> <path> <integration>`;
    symlink untracked deps the build needs (node_modules, .env files, venvs).
    Keep work off the integration branch until gated. (A solo LITE-lane item may
@@ -453,15 +250,13 @@ and the bar binds either way. Do not try to out-argue it.
    the "deployed build" the next step verifies.
 9. **Verify by value on the target**, driving the reporter's exact
    flow, then the flow's terminal action and the changed pattern's twins.
-   **Capture the proof as you verify - a required artifact, not a nicety
-   (any wired close-out referee checks for it):** for a UI/behavior item, take a SCREENSHOT
-   of the deployed surface AND read the rendered value via the DOM (the
-   screenshot is the shareable proof you looked; the DOM read is the actual
-   by-value assertion - a screenshot alone can show a grey placeholder and pass the
-   eye); for a data item, the by-value staging query output plus the
-   deployment sha-confirm IS the artifact; for an artifact/API item, the
-   captured command run / endpoint response (at the merged sha) IS it. Re-run
-   the step-2 acceptance line verbatim. If you cannot re-check it, say so - do
+   Re-run the step-2 acceptance line verbatim, and **capture the evidence
+   artifacts the gates layer requires as you verify - required, not a
+   nicety** (its machine-checkable live evidence bound to the deployed sha;
+   any wired close-out referee checks for them; per-medium artifact shapes
+   are the layer's spec - e.g. a UI item is typically a screenshot PLUS a
+   by-value DOM read, because a screenshot alone can show a grey placeholder
+   and pass the eye). If you cannot re-check the acceptance line, say so - do
    not assert "fixed". When UI-driving the repro is fragile or slow, construct
    the reporter's state via the app's own API and assert persisted state by
    value - a legitimate repro, often 10x faster.
@@ -469,7 +264,7 @@ and the bar binds either way. Do not try to out-argue it.
     status with concise resolution notes (what changed + that it was
     browser-verified). No tracker (the task arrived as text)? Same close-out,
     different medium: report to the user per task with the SAME observed-value
-    evidence - the verification gate, the evidence bar, and the trajectory
+    evidence - the gates layer's evidence bar and the trajectory
     append below apply identically. **The note MUST cite the OBSERVED VALUE, never the bare
     word "fixed" / "verified":** "verified live on the deployed build: the
     Resolved tile shows 3" or "by-value staging query returns resolved_count =
@@ -685,18 +480,11 @@ re-reads.
 
 | Rationalization | Reality |
 |---|---|
-| "Tests pass, it's fixed" | jsdom != production render. Verify by value on the deploy. |
-| "My change is deployed, so it's fixed" | Deployed != the reported symptom is gone. Re-check the reproduced symptom, not just that your change shipped. |
-| "Can't reproduce it, but the code clearly shows the cause" | Reasoning != observation. Get a tool/info that CAN observe it, or downgrade the claim - never assert "fixed" against a symptom you never saw. |
-| "I found the component by grep" | Grep finds A component, not THE surface. Drive the reporter's screen. |
-| "Can't open the surface, but the code clearly shows how it works" | Code-inference under blocked observation is a HYPOTHESIS, not a fact. Hedge it, cross-check the authoritative enum/type/contract (not one grep), and let a refuting gate (tsc/test) re-open the diagnosis. |
-| "Automation can't reach it, so ship unverified-reasoned" | Drive the user's LIVE session via Claude-in-Chrome first, then Playwright/DevTools/preview. A surface behind a visible button is observable - exhaust the tools before any can't-observe downgrade. |
-| "The deploy is probably done" | Confirm the sha. ~70s feels like forever; verify anyway. |
+| "CI is green / the test passes / it deployed - close it" | Verification claims are the gates layer's to grade: its skill is loaded (loop entry), its evidence bar applies, and its honesty ladder is the only alternate exit. Never out-argue the referee. |
+| "Automation can't reach it, so downgrade" | Exhaust the observation tools first (the user's LIVE authed session via the browser MCP, then Playwright/DevTools/preview). A surface behind a visible button is observable; the honesty ladder is a last resort, not a first one. |
 | "This needs the reporter's screenshot" | If a prototype/design source is on disk, extract the spec yourself first. |
 | "I'll reply on the ticket page" | Reply in the reporter's THREAD or they won't see it in context. |
 | "Auth wall - I'll log in" | Never enter credentials/OTP. Pause and ask the user to re-auth. |
-| "My step works; the rest of the flow is unchanged" | The seam you changed feeds the terminal action. Drive it. |
-| "Fixed the exact card the reporter pointed at" | Its twin in the sibling flow still has the old pattern - the next ticket. |
 | "I'll just push direct, the bypass notice is normal" | A required check that never blocks is a single point of failure. Open a PR; merge on green (author-preserving). |
 | "Starting fresh on this surface" | Maybe not - check the trajectory memory (if wired) first; a past recorded failure is the wrong-surface trap already paid for once. |
 | "I'll finish this ticket first, then look at the new ask" | Re-batch (step 0): the new item joins the work-set NOW; your CI/deploy waits are exactly when its build should run. Queueing it is the serial trap. |

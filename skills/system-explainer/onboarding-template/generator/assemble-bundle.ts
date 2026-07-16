@@ -1,15 +1,18 @@
 /**
- * Assemble a validated, grounded OnboardingBundle from the autonomous loop's JSON output.
+ * Assemble a validated, grounded OnboardingBundle from the autonomous loop's output.
  *
- *   npm run assemble -- --in <loop-output.json> --system <id> [--repo <repo-path>]
+ *   npm run assemble -- --dir <workDir> --system <id> [--repo <repo-path>] [--out <dir>]   (disk-bus, preferred)
+ *   npm run assemble -- --in <loop-output.json> --system <id> [--repo <repo-path>]          (legacy single-JSON)
  *
- * The `auto-course` workflow emits { system, modules:[DraftModule] } with snippets verified
- * in-loop. This deterministic back half maps DraftModules to the engine's bundle contract,
- * re-runs the REAL grounding gate against the repo (authoritative, independent of the loop),
- * validates, and writes bundles/<system>/bundle.json + public/bundle.json. It is the
- * product's second half: orchestrated authoring (the loop) → deterministic, verified assembly.
+ * The `auto-course` workflow writes plan.json + datamodel.json + modules/<id>.json to a work
+ * directory (the disk-bus — content never routes through the orchestrator's context). This
+ * deterministic back half reads those files (or the legacy combined JSON), maps DraftModules
+ * to the engine's bundle contract, re-runs the REAL grounding gate against the repo
+ * (authoritative, independent of the loop), validates, and writes bundles/<system>/bundle.json
+ * + public/bundle.json. It is the product's second half: orchestrated authoring (the loop) →
+ * deterministic, verified assembly.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { validateBundle } from './validate'
@@ -145,15 +148,59 @@ function sourceLicenseOf(read: FileReader): string | undefined {
   return undefined
 }
 
+/** Read a disk-bus work directory (plan.json + datamodel.json + modules/*.json) into the
+ *  same { system, dataModel, modules } shape the legacy combined JSON used. Module order
+ *  follows plan.json's domain order; unparseable module files fail LOUDLY (never skipped
+ *  silently — a corrupt agent write must not shrink the course unnoticed). */
+export function readWorkDir(dir: string): any {
+  const readJson = (p: string) => JSON.parse(readFileSync(p, 'utf8'))
+  const plan = existsSync(path.join(dir, 'plan.json')) ? readJson(path.join(dir, 'plan.json')) : {}
+  const dataModel = existsSync(path.join(dir, 'datamodel.json')) ? readJson(path.join(dir, 'datamodel.json')) : { entities: [] }
+  const modDir = path.join(dir, 'modules')
+  if (!existsSync(modDir)) throw new Error(`no modules/ under ${dir} — did the loop finish?`)
+  const files = readdirSync(modDir).filter((f) => f.endsWith('.json'))
+  if (!files.length) throw new Error(`modules/ is empty under ${dir}`)
+  const byId = new Map<string, any>()
+  const broken: string[] = []
+  for (const f of files) {
+    try {
+      const m = readJson(path.join(modDir, f))
+      if (!m || !m.id) throw new Error('missing id')
+      byId.set(m.id, m)
+    } catch (e: any) {
+      broken.push(`${f}: ${e.message}`)
+    }
+  }
+  if (broken.length) throw new Error(`unparseable module file(s) — fix or re-run their author/verify agents:\n  ${broken.join('\n  ')}`)
+  // plan.json's domain order is the course order; unplanned modules (critic additions) follow alphabetically
+  const planned: string[] = (plan.domains || []).map((d: any) => d.id).filter((id: string) => byId.has(id))
+  const extras = [...byId.keys()].filter((id) => !planned.includes(id)).sort()
+  const modules = [...planned, ...extras].map((id) => byId.get(id))
+  return {
+    system: {
+      name: plan.systemName,
+      oneLiner: plan.oneLiner,
+      elevatorPitch: plan.elevatorPitch,
+      outOfScope: plan.outOfScope || [],
+      audience: plan.audience,
+      depth: plan.depth,
+      repoUrl: plan.repoUrl || undefined,
+    },
+    dataModel,
+    modules,
+  }
+}
+
 async function main() {
   const inPath = arg('in')
+  const dirPath = arg('dir')
   const system = arg('system')
   const repo = arg('repo')
-  if (!inPath || !system) {
-    console.error('Usage: npm run assemble -- --in <loop-output.json> --system <id> [--repo <repo-path>]')
+  if ((!inPath && !dirPath) || !system) {
+    console.error('Usage: npm run assemble -- (--dir <workDir> | --in <loop-output.json>) --system <id> [--repo <repo-path>] [--out <dir>]')
     process.exit(1)
   }
-  const out = JSON.parse(readFileSync(inPath, 'utf8'))
+  const out = dirPath ? readWorkDir(path.resolve(dirPath)) : JSON.parse(readFileSync(inPath!, 'utf8'))
   const bundle: any = buildBundle(out, system)
   bundle.generatedAt = new Date().toISOString()
 
@@ -223,7 +270,10 @@ async function main() {
   console.log(`  → ${path.relative(root, path.join(outDir, 'bundle.json'))}`)
 }
 
-main().catch((e) => {
-  console.error(e)
-  process.exit(1)
-})
+// Only run the CLI when executed directly (not when imported by the test).
+const isMain = !!process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+if (isMain)
+  main().catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })

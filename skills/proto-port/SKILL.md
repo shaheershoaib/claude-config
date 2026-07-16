@@ -1,6 +1,6 @@
 ---
 name: proto-port
-description: Use when building or porting a surface, page, module, or feature FROM a prototype or design source of truth - "port the X page from the prototype", "build module N to match the proto", net-new screens where a runnable/readable prototype exists and testers will compare the build against it leaf by leaf. Formerly parity-builder. NOT for fixing tickets on an existing surface (ship) and NOT for verifying an already-built surface (parity-receipt).
+description: Use when building or porting a surface, page, module, or feature FROM a prototype or design source of truth (the proto may be a frontend, a backend, or full-stack) - "port the X page from the prototype", "build module N to match the proto", "turn this prototype into the app", net-new screens where a runnable/readable prototype exists and testers will compare the build against it leaf by leaf. Formerly parity-builder. NOT for fixing tickets on an existing surface (ship) and NOT for verifying an already-built surface (parity-receipt).
 ---
 
 # proto-port
@@ -26,15 +26,73 @@ finishing with a `parity-receipt` proving nothing was dropped.
   passed). The translation's "I did all of it" is a claim authored by the
   thing being checked - hence the receipt.
 
-## Step 0 - translation-distance triage
+## Step 0 - intake, then triage
 
-Assess how much the port must INVENT, then pick the lane:
+**Derive first, ask the gaps in ONE batch.** Inspect the proto and any named
+target repos and derive every intake fact you can. Then ask the user ONLY
+the unresolved items, in one batch (AskUserQuestion where available) -
+never a drip-feed, and never a question the repos already answer. Phrase
+dependent facts conditionally inside the same batch (e.g. overlap ownership
+applies only if the topology answer keeps an existing app) rather than
+spending a second round. Record the answers as a `port_config` block at the
+head of the receipt artifact: the port and its receipt are judged on that
+declared basis.
+
+The intake facts:
+1. **Proto coverage** - is the proto a frontend, a backend, or full-stack?
+   (Usually derivable by inspection; ask only if genuinely mixed/unclear.)
+2. **Target shape + stacks** - does the port need a frontend, a backend, or
+   both, and on which stacks? An existing app answers this from its repos.
+   GREENFIELD target stacks are a USER decision - never assume one.
+3. **Repo topology** - port into the existing repo(s), start a new repo, or
+   REPLACE the existing app by promoting the proto? Replacement is
+   confirm-ALWAYS, even when it looks obvious.
+4. **Overlap ownership** - when the target already implements some scoped
+   surfaces: does the port own them, merge leaf-by-leaf (existing app wins,
+   CONFLICTs to the user), or skip them?
+5. **Scope** - the whole proto or named surfaces/modules, plus the explicit
+   `SCOPED-OUT` list, so nothing is dropped silently.
+6. **Proto authority** - one-time input (the app leads after this port) or
+   standing source of truth (future receipts re-compare against it)?
+7. **Visual basis** - adopt the proto's look verbatim, or re-skin through
+   the app's design system? (Feeds parity-receipt's visual judge.)
+8. **Auth/RBAC** - protos rarely carry auth: integrate the ported surfaces
+   into the existing auth/roles, build new, or none? Which roles gate them?
+9. **Data constraints + seed source** - greenfield schema freedom, or an
+   existing DB/production data the contract must respect? Seeds fabricated
+   or sampled from real data?
+
+Intake answers are CONFIGURATION (stacks, topology, scope, basis) - never
+content. The proto code remains the only content input; a prose description
+of how a surface should work is a story (see the red flags).
+
+**Unattended runs** (a scheduled loop, no user to ask): repo topology /
+replacement, greenfield target stacks, and proto authority are BLOCKING -
+park the item and ask in-thread. The remaining facts may proceed on a
+stated assumption recorded in `port_config`.
+
+**Then triage the lane** by translation distance (how much the port must
+INVENT):
 - **Distance ~0** (same stack, proto already calls the real API,
   production-grade code): **PROMOTE** the proto - fork it, then run only the
   seeds pass (step 3) and a smoke `parity-receipt`. Running the full flow
   here is waste; the skill's weight must scale with translation distance.
 - **Distance large** (mock data, different framework, backend endpoints don't
   exist yet - the usual case): full flow below.
+
+**Port shape follows proto coverage.** Coverage is judged by what the code
+MEANS to carry, not by folder structure: a mock server that exists only to
+serve the proto's mock data is NOT backend coverage - it is mock data, and
+its routes/payloads feed the UI contract pass. BACKEND coverage means the
+proto carries real business logic/models meant to define production
+behavior. A UI proto runs the flow as written (mock-implied contract,
+seeds, browser receipt). A BACKEND proto inverts step 1 - its
+handlers/models ARE the contract: extract it and check the consumers
+instead - keeps the seeds/fixtures pass, and its receipt is request-level
+(drive every endpoint and multi-step API sequence to its terminal state,
+assert payloads by value) rather than a browser crawl. A FULL-STACK proto
+runs both, backend as the wave-0 producer (declare the `fanout` `after`
+edge so FE leaves wait on their contract).
 
 ## Flow
 
@@ -113,6 +171,8 @@ are where the tester's ticket comes from.
 | "Steps render, the wizard's basically done" | Every step's JSX can translate faithfully while the flow can't advance on real persistence. Drive Step-1 -> terminal; "stuck at Step 1" was the M5 wave's #1 blocker. |
 | "95% mapped, close it out" | The unmapped 5% are exactly the tickets testers will file. 100% or it's open. |
 | "The proto does X, the app deliberately does Y - I'll pick" | That's a CONFLICT. Keep the app, note both sides, USER decides. Never silently down-build to a leaner/mock proto. |
+| "The target stack / repo topology is obvious - assume it" | Wrong-stack and wrong-repo ports are the most expensive rework class. Derive from the repos, ASK the gaps in one batch (step 0). Replacing an existing app is confirm-always. |
+| "The user described the surface in their intake reply - build from that" | Intake answers are configuration, never content. A prose description is a story; the proto CODE stays the only content input. |
 
 Any edit to this skill must re-verify against
 `~/.claude/skills/parity-receipt/known-misses.md` (the standing regression
